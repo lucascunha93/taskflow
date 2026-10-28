@@ -1,0 +1,82 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model Organization {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(120)
+  slug        String       @unique @db.VarChar(80)
+  memberships Membership[]
+  tasks       Task[]
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@map("organizations")
+}
+
+model User {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(120)
+  email       String       @unique @db.VarChar(254)
+  memberships Membership[]
+  createdTasks Task[]      @relation("TaskCreator")
+  assignedTasks Task[]     @relation("TaskAssignee")
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@map("users")
+}
+
+model Membership {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  userId         String         @db.Uuid
+  role           MembershipRole @default(MEMBER)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Task {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  title           String       @db.VarChar(200)
+  description     String?      @db.Text
+  status          TaskStatus   @default(TODO)
+  creatorId       String       @db.Uuid
+  assigneeId      String?      @db.Uuid
+  version         Int          @default(1)
+  dueDate         DateTime?    @db.Timestamptz(3)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator         User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee        User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, assigneeId])
+  @@map("tasks")
+}

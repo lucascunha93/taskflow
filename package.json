@@ -1,0 +1,21 @@
+{
+  "name": "taskflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "B2B task management platform with offline-first mobile synchronization",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check:node": "node --version",
+    "check:npm": "npm --version"
+  },
+  "allowScripts": {
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true
+  }
+}
