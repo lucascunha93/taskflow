@@ -179,4 +179,44 @@ export class OrganizationsService {
     };
   }
 
+
+  async findMembers(
+    organizationId: string,
+    requesterId: string,
+  ) {
+    const requesterMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: requesterId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!requesterMembership) {
+      throw new NotFoundException('Organização não encontrada.');
+    }
+
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId },
+      select: {
+        id: true,
+        role: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return memberships;
+  }
 }

@@ -58,4 +58,17 @@ export class OrganizationsController {
     );
   }
 
+
+  @Get(':organizationId/members')
+  findMembers(
+    @Param('organizationId') organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.organizationsService.findMembers(
+      organizationId,
+      request.user.sub,
+    );
+  }
+
+
 }
