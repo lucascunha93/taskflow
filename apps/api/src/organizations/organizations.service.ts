@@ -1,6 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  AddMemberDto,
+  OrganizationMemberRole,
+} from './dto/add-member.dto.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
+
 
 @Injectable()
 export class OrganizationsService {
@@ -72,4 +82,101 @@ export class OrganizationsService {
       },
     });
   }
+
+
+  async addMember(
+    organizationId: string,
+    requesterId: string,
+    dto: AddMemberDto,
+  ) {
+    const email = dto.email.trim().toLowerCase();
+
+    // Verifica se a organização existe e se quem solicita
+    // é OWNER ou ADMIN dessa organização.
+    const requesterMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: requesterId,
+        },
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    if (!requesterMembership) {
+      throw new NotFoundException('Organização não encontrada.');
+    }
+
+    if (
+      requesterMembership.role !== 'OWNER' &&
+      requesterMembership.role !== 'ADMIN'
+    ) {
+      throw new ForbiddenException(
+        'Você não tem permissão para adicionar membros.',
+      );
+    }
+
+    // Localiza o usuário que será adicionado.
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Não existe usuário cadastrado com esse e-mail.',
+      );
+    }
+
+    // Evita associar o mesmo usuário duas vezes.
+    const existingMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (existingMembership) {
+      throw new ConflictException(
+        'Esse usuário já pertence à organização.',
+      );
+    }
+
+    // Um ADMIN não pode adicionar outro ADMIN.
+    if (
+      requesterMembership.role === 'ADMIN' &&
+      dto.role === OrganizationMemberRole.ADMIN
+    ) {
+      throw new ForbiddenException(
+        'Somente o OWNER pode adicionar administradores.',
+      );
+    }
+
+    const membership = await this.prisma.membership.create({
+      data: {
+        organizationId,
+        userId: user.id,
+        role: dto.role,
+      },
+      select: {
+        id: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      user,
+      membership,
+    };
+  }
+
 }
