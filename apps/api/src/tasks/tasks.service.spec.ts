@@ -11,6 +11,7 @@ describe('TasksService', () => {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
       findFirst: ReturnType<typeof vi.fn>;
+      deleteMany: ReturnType<typeof vi.fn>;
       updateManyAndReturn: ReturnType<typeof vi.fn>;
     };
   };
@@ -20,7 +21,10 @@ describe('TasksService', () => {
   beforeEach(async () => {
     prisma = {
       membership: { findUnique: vi.fn() },
-      task: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), updateManyAndReturn: vi.fn() },
+      task: {
+        create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(),
+        deleteMany: vi.fn(), updateManyAndReturn: vi.fn(),
+      },
     };
     const module = await Test.createTestingModule({
       providers: [TasksService, { provide: PrismaService, useValue: prisma }],
@@ -246,5 +250,65 @@ describe('TasksService', () => {
     await expect(service.update(organizationId, 'task-a', userId, { version: 1, title: 'Title' }))
       .rejects.toMatchObject({ status: 404 });
     expect(prisma.task.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('deletes only the requested version and organization in a single conditional operation', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.deleteMany.mockResolvedValue({ count: 1 });
+    await expect(service.remove(organizationId, 'task-a', userId, 3)).resolves.toBeUndefined();
+    expect(prisma.task.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: 'task-a',
+        organizationId,
+        version: 3,
+        organization: { memberships: { some: { userId } } },
+      },
+    });
+    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('does not delete for a requester without an organization membership', async () => {
+    prisma.membership.findUnique.mockResolvedValue(null);
+    await expect(service.remove(organizationId, 'task-a', userId, 1))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the task does not exist in the requested organization', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.task.findFirst.mockResolvedValue(null);
+    await expect(service.remove(organizationId, 'other-tenant-task', userId, 1))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'other-tenant-task', organizationId,
+        organization: { memberships: { some: { userId } } },
+      },
+    }));
+  });
+
+  it('returns 409 without deleting a task when the version is stale', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.task.findFirst.mockResolvedValue({ id: 'task-a', version: 2 });
+    await expect(service.remove(organizationId, 'task-a', userId, 1))
+      .rejects.toMatchObject({ status: 409 });
+    expect(prisma.task.deleteMany).toHaveBeenCalledOnce();
+  });
+
+  it('does not delete when membership is revoked before the conditional delete', async () => {
+    prisma.membership.findUnique.mockResolvedValueOnce({ id: 'requester' }).mockResolvedValueOnce(null);
+    prisma.task.deleteMany.mockResolvedValue({ count: 0 });
+    await expect(service.remove(organizationId, 'task-a', userId, 1))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('propagates unexpected database failures during deletion', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.deleteMany.mockRejectedValue(new Error('database unavailable'));
+    await expect(service.remove(organizationId, 'task-a', userId, 1))
+      .rejects.toThrow('database unavailable');
   });
 });

@@ -180,6 +180,35 @@ export class TasksService {
     throw new ConflictException('A tarefa não pôde ser atualizada. Tente novamente.');
   }
 
+  async remove(
+    organizationId: string,
+    taskId: string,
+    userId: string,
+    version: number,
+  ): Promise<void> {
+    await this.assertMembership(organizationId, userId);
+
+    const result = await this.prisma.task.deleteMany({
+      where: {
+        id: taskId,
+        organizationId,
+        version,
+        organization: { memberships: { some: { userId } } },
+      },
+    });
+
+    if (result.count > 0) {
+      return;
+    }
+
+    const current = await this.findOne(organizationId, taskId, userId);
+    if (current.version !== version) {
+      throw new ConflictException('A tarefa foi alterada. Atualize os dados e tente novamente.');
+    }
+
+    throw new ConflictException('A tarefa não pôde ser excluída. Tente novamente.');
+  }
+
   private async isAssigneeMember(organizationId: string, userId: string): Promise<boolean> {
     const membership = await this.prisma.membership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },

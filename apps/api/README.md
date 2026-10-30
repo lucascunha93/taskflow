@@ -71,7 +71,7 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 | POST, GET | `/organizations` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
-| GET, PUT | `/organizations/:organizationId/tasks/:taskId` | JWT |
+| GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
 
 A criação de tarefas valida a associação do solicitante e do responsável.
 As consultas exigem associação à organização e retornam os campos da tarefa
@@ -97,8 +97,14 @@ Exemplo de remoção do prazo:
 ```
 
 Uma atualização contendo apenas `version` também incrementa a versão. O
-criador e a organização não são alteráveis pelo cliente. Ainda não existe
-endpoint para excluir tarefas.
+criador e a organização não são alteráveis pelo cliente.
+
+Para excluir uma tarefa, envie a versão atual como parâmetro de consulta:
+`DELETE /organizations/:organizationId/tasks/:taskId?version=1`. A versão
+é obrigatória e deve ser um inteiro positivo. A exclusão condiciona a operação
+ao identificador, à organização, à associação e à versão em uma única
+operação. O sucesso retorna 204 sem corpo; organização inacessível ou tarefa
+inexistente na organização retorna 404; versão desatualizada retorna 409.
 
 O Observe é configurado em `AppModule`; revise suas credenciais e política de
 telemetria antes de uso. Rate limiting, renovação de sessão e configuração

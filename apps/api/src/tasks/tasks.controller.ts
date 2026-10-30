@@ -2,11 +2,15 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +19,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
+import { DeleteTaskDto } from './dto/delete-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 
@@ -69,5 +74,16 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
   ) {
     return this.tasksService.update(organizationId, taskId, request.user.sub, dto);
+  }
+
+  @Delete(':taskId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Req() request: AuthenticatedRequest,
+    @Query() query: DeleteTaskDto,
+  ): Promise<void> {
+    await this.tasksService.remove(organizationId, taskId, request.user.sub, query.version);
   }
 }
