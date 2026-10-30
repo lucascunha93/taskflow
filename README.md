@@ -9,8 +9,8 @@ existe; as aplicações web e mobile ainda não estão configuradas.
 - Cadastro, login com Argon2id e JWT, e perfil autenticado.
 - Criação e listagem de organizações; inclusão e listagem de membros com
   verificação de permissões.
-- Criação de tarefas com validação da associação do criador e do responsável.
-  Listagem, atualização, exclusão, filtros e concorrência otimista ainda faltam.
+- Criação, listagem e consulta de tarefas por organização, com validação de
+  associação. Atualização, exclusão, filtros e concorrência otimista ainda faltam.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
 
 O campo `version` já existe no banco, mas ainda não implementa controle de

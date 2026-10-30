@@ -70,11 +70,20 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 | GET | `/auth/me` | JWT |
 | POST, GET | `/organizations` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
-| POST | `/organizations/:organizationId/tasks` | JWT |
+| POST, GET | `/organizations/:organizationId/tasks` | JWT |
+| GET | `/organizations/:organizationId/tasks/:taskId` | JWT |
 
 A criação de tarefas valida a associação do solicitante e do responsável.
-Ainda não existem endpoints para listar, atualizar ou excluir tarefas nem
-controle de concorrência otimista, apesar do campo `version` no modelo.
+As consultas exigem associação à organização e retornam os campos da tarefa
+mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
+A listagem retorna um array ordenado por `updatedAt` decrescente, com `id`
+decrescente como desempate. Ainda não há filtros ou paginação: a listagem
+retorna todas as tarefas da organização. O detalhe retorna 404 para tarefa
+inexistente na organização, inclusive quando pertence a outro tenant.
+Organizações inacessíveis também retornam 404.
+
+Ainda não existem endpoints para atualizar ou excluir tarefas nem controle
+de concorrência otimista, apesar do campo `version` no modelo.
 
 O Observe é configurado em `AppModule`; revise suas credenciais e política de
 telemetria antes de uso. Rate limiting, renovação de sessão e configuração

@@ -2,6 +2,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Post,
@@ -27,6 +28,23 @@ export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
   ) {}
+
+  @Get()
+  findAll(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tasksService.findAll(organizationId, request.user.sub);
+  }
+
+  @Get(':taskId')
+  findOne(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tasksService.findOne(organizationId, taskId, request.user.sub);
+  }
 
   @Post()
   create(
