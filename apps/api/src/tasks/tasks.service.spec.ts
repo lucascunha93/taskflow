@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 
 describe('TasksService', () => {
@@ -10,6 +11,7 @@ describe('TasksService', () => {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
       findFirst: ReturnType<typeof vi.fn>;
+      updateManyAndReturn: ReturnType<typeof vi.fn>;
     };
   };
   const organizationId = 'organization-a';
@@ -18,7 +20,7 @@ describe('TasksService', () => {
   beforeEach(async () => {
     prisma = {
       membership: { findUnique: vi.fn() },
-      task: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
+      task: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), updateManyAndReturn: vi.fn() },
     };
     const module = await Test.createTestingModule({
       providers: [TasksService, { provide: PrismaService, useValue: prisma }],
@@ -121,5 +123,128 @@ describe('TasksService', () => {
         organization: { memberships: { some: { userId } } },
       },
     }));
+  });
+
+  it('updates supplied fields atomically and increments the version', async () => {
+    const updated = { id: 'task-a', organizationId, version: 3 };
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.updateManyAndReturn.mockResolvedValue([updated]);
+
+    await expect(service.update(organizationId, 'task-a', userId, {
+      version: 2, title: ' Updated ', description: ' Details ', status: TaskStatus.DONE,
+      assigneeId: 'member', dueDate: '2026-10-30',
+    })).resolves.toEqual(updated);
+    expect(prisma.membership.findUnique).toHaveBeenCalledWith({
+      where: { organizationId_userId: { organizationId, userId: 'member' } },
+      select: { id: true },
+    });
+    expect(prisma.task.updateManyAndReturn).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'task-a', organizationId, version: 2,
+        organization: { memberships: { some: { userId } } },
+        AND: [{ organization: { memberships: { some: { userId: 'member' } } } }],
+      },
+      data: {
+        title: 'Updated', description: 'Details', status: TaskStatus.DONE,
+        assigneeId: 'member', dueDate: new Date('2026-10-30'), version: { increment: 1 },
+      },
+    }));
+    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['title', { version: 1, title: 'New title' }, { title: 'New title' }],
+    ['status', { version: 1, status: TaskStatus.IN_PROGRESS }, { status: TaskStatus.IN_PROGRESS }],
+    ['removing the assignee', { version: 1, assigneeId: null }, { assigneeId: null }],
+    ['removing the due date', { version: 1, dueDate: null }, { dueDate: null }],
+    ['removing the description', { version: 1, description: null }, { description: null }],
+  ])('updates %s without replacing omitted fields', async (_label, dto, expected) => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.updateManyAndReturn.mockResolvedValue([{ id: 'task-a', version: 2 }]);
+    await service.update(organizationId, 'task-a', userId, dto);
+    expect(prisma.task.updateManyAndReturn).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'task-a', organizationId, version: 1,
+        organization: { memberships: { some: { userId } } },
+      },
+      data: {
+        title: undefined, description: undefined, status: undefined,
+        assigneeId: undefined, dueDate: undefined, version: { increment: 1 }, ...expected,
+      },
+    }));
+  });
+
+  it('does not update tasks for a user outside the organization', async () => {
+    prisma.membership.findUnique.mockResolvedValue(null);
+    await expect(service.update(organizationId, 'task-a', userId, { version: 1, title: 'Title' }))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.updateManyAndReturn).not.toHaveBeenCalled();
+  });
+
+  it('rejects an assignee outside the organization', async () => {
+    prisma.membership.findUnique
+      .mockResolvedValueOnce({ id: 'requester' })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'requester' });
+    prisma.task.findFirst.mockResolvedValue({ id: 'task-a', version: 1 });
+    await expect(service.update(organizationId, 'task-a', userId, {
+      version: 1, assigneeId: 'outsider',
+    })).rejects.toMatchObject({ status: 403 });
+    expect(prisma.task.updateManyAndReturn).not.toHaveBeenCalled();
+  });
+
+  it('does not disclose a cross-tenant task when the proposed assignee is invalid', async () => {
+    prisma.membership.findUnique
+      .mockResolvedValueOnce({ id: 'requester' })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'requester' });
+    prisma.task.findFirst.mockResolvedValue(null);
+    await expect(service.update(organizationId, 'other-task', userId, {
+      version: 1, assigneeId: 'outsider',
+    })).rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.updateManyAndReturn).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for missing tasks and tasks in another tenant', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.updateManyAndReturn.mockResolvedValue([]);
+    prisma.task.findFirst.mockResolvedValue(null);
+    await expect(service.update(organizationId, 'other-task', userId, { version: 1, title: 'Title' }))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.updateManyAndReturn).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'other-task', organizationId, version: 1,
+        organization: { memberships: { some: { userId } } },
+      },
+    }));
+  });
+
+  it('returns 409 when the version is stale after a failed conditional update', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.updateManyAndReturn.mockResolvedValue([]);
+    prisma.task.findFirst.mockResolvedValue({ id: 'task-a', version: 2 });
+    await expect(service.update(organizationId, 'task-a', userId, { version: 1, title: 'Title' }))
+      .rejects.toMatchObject({ status: 409 });
+    expect(prisma.task.updateManyAndReturn).toHaveBeenCalledOnce();
+  });
+
+  it('does not update when an assignee membership is revoked before the atomic update', async () => {
+    prisma.membership.findUnique
+      .mockResolvedValueOnce({ id: 'requester' })
+      .mockResolvedValueOnce({ id: 'assignee' })
+      .mockResolvedValueOnce({ id: 'requester' })
+      .mockResolvedValueOnce(null);
+    prisma.task.updateManyAndReturn.mockResolvedValue([]);
+    prisma.task.findFirst.mockResolvedValue({ id: 'task-a', version: 1 });
+    await expect(service.update(organizationId, 'task-a', userId, { version: 1, assigneeId: 'member' }))
+      .rejects.toMatchObject({ status: 403 });
+  });
+
+  it('returns 404 if the requester membership is revoked before the atomic update', async () => {
+    prisma.membership.findUnique.mockResolvedValueOnce({ id: 'requester' }).mockResolvedValueOnce(null);
+    prisma.task.updateManyAndReturn.mockResolvedValue([]);
+    await expect(service.update(organizationId, 'task-a', userId, { version: 1, title: 'Title' }))
+      .rejects.toMatchObject({ status: 404 });
+    expect(prisma.task.findFirst).not.toHaveBeenCalled();
   });
 });

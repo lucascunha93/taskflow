@@ -1,5 +1,6 @@
 
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
+import { UpdateTaskDto } from './dto/update-task.dto.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -117,6 +119,73 @@ export class TasksService {
     });
 
     return task;
+  }
+
+  async update(
+    organizationId: string,
+    taskId: string,
+    userId: string,
+    dto: UpdateTaskDto,
+  ): Promise<TaskDetails> {
+    await this.assertMembership(organizationId, userId);
+
+    if (dto.assigneeId != null && !(await this.isAssigneeMember(organizationId, dto.assigneeId))) {
+      const current = await this.findOne(organizationId, taskId, userId);
+      if (current.version !== dto.version) {
+        throw new ConflictException('A tarefa foi alterada. Atualize os dados e tente novamente.');
+      }
+      throw new ForbiddenException('O responsável precisa pertencer à organização.');
+    }
+
+    const updated = await this.prisma.task.updateManyAndReturn({
+      where: {
+        id: taskId,
+        organizationId,
+        version: dto.version,
+        organization: { memberships: { some: { userId } } },
+        ...(dto.assigneeId != null
+          ? {
+              AND: [{
+                organization: {
+                  memberships: { some: { userId: dto.assigneeId } },
+                },
+              }],
+            }
+          : {}),
+      },
+      data: {
+        title: dto.title?.trim(),
+        description: typeof dto.description === 'string' ? dto.description.trim() : dto.description,
+        status: dto.status,
+        assigneeId: dto.assigneeId,
+        dueDate: dto.dueDate == null ? dto.dueDate : new Date(dto.dueDate),
+        version: { increment: 1 },
+      },
+      select: taskDetailsSelect,
+    });
+
+    if (updated.length > 0) {
+      return updated[0];
+    }
+
+    const current = await this.findOne(organizationId, taskId, userId);
+    if (current.version !== dto.version) {
+      throw new ConflictException('A tarefa foi alterada. Atualize os dados e tente novamente.');
+    }
+
+    if (dto.assigneeId != null && !(await this.isAssigneeMember(organizationId, dto.assigneeId))) {
+      throw new ForbiddenException('O responsável precisa pertencer à organização.');
+    }
+
+    throw new ConflictException('A tarefa não pôde ser atualizada. Tente novamente.');
+  }
+
+  private async isAssigneeMember(organizationId: string, userId: string): Promise<boolean> {
+    const membership = await this.prisma.membership.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { id: true },
+    });
+    return membership !== null;
   }
 
   private async assertMembership(organizationId: string, userId: string): Promise<void> {

@@ -9,13 +9,13 @@ existe; as aplicações web e mobile ainda não estão configuradas.
 - Cadastro, login com Argon2id e JWT, e perfil autenticado.
 - Criação e listagem de organizações; inclusão e listagem de membros com
   verificação de permissões.
-- Criação, listagem e consulta de tarefas por organização, com validação de
-  associação. Atualização, exclusão, filtros e concorrência otimista ainda faltam.
+- Criação, listagem, consulta e atualização de tarefas por organização, com
+  validação de associação e controle de versão. Exclusão e filtros ainda faltam.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
 
-O campo `version` já existe no banco, mas ainda não implementa controle de
-concorrência. O funcionamento offline e a sincronização mobile são planos
-futuros, não funcionalidades disponíveis.
+As atualizações usam concorrência otimista por `version`. O funcionamento
+offline e a sincronização mobile são planos futuros, não funcionalidades
+disponíveis.
 
 ## Requisitos
 

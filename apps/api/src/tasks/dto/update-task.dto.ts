@@ -9,6 +9,7 @@ import {
     MaxLength,
     Min,
     MinLength,
+    ValidateIf,
 } from 'class-validator';
 import { Trim } from '../../common/validation/trim.decorator.js';
 
@@ -21,7 +22,7 @@ export enum TaskStatus {
 
 export class UpdateTaskDto {
     @Trim()
-    @IsOptional()
+    @ValidateIf((_object, value: unknown) => value !== undefined)
     @IsString()
     @MinLength(3)
     @MaxLength(180)
@@ -30,20 +31,21 @@ export class UpdateTaskDto {
     @Trim()
     @IsOptional()
     @IsString()
+    @MinLength(1)
     @MaxLength(5000)
-    description?: string;
+    description?: string | null;
 
-    @IsOptional()
+    @ValidateIf((_object, value: unknown) => value !== undefined)
     @IsEnum(TaskStatus)
     status?: TaskStatus;
 
     @IsOptional()
     @IsUUID()
-    assigneeId?: string;
+    assigneeId?: string | null;
 
     @IsOptional()
-    @IsDateString()
-    dueDate?: string;
+    @IsDateString({ strict: true })
+    dueDate?: string | null;
 
     @IsInt()
     @Min(1)

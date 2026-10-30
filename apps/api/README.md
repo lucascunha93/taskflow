@@ -71,7 +71,7 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 | POST, GET | `/organizations` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
-| GET | `/organizations/:organizationId/tasks/:taskId` | JWT |
+| GET, PUT | `/organizations/:organizationId/tasks/:taskId` | JWT |
 
 A criação de tarefas valida a associação do solicitante e do responsável.
 As consultas exigem associação à organização e retornam os campos da tarefa
@@ -82,8 +82,23 @@ retorna todas as tarefas da organização. O detalhe retorna 404 para tarefa
 inexistente na organização, inclusive quando pertence a outro tenant.
 Organizações inacessíveis também retornam 404.
 
-Ainda não existem endpoints para atualizar ou excluir tarefas nem controle
-de concorrência otimista, apesar do campo `version` no modelo.
+O `PUT` aceita atualizações parciais de `title`, `description`, `status`,
+`assigneeId` e `dueDate`. A `version` atual é obrigatória: se estiver
+desatualizada, a resposta é 409; quando a atualização é bem-sucedida, a versão
+é incrementada. Campos omitidos são preservados. Para remover o responsável,
+o prazo ou a descrição, envie o campo correspondente com valor `null`. Título e
+descrição não aceitam strings vazias ou somente espaços, e título e status não
+aceitam `null`. O responsável informado precisa pertencer à organização.
+
+Exemplo de remoção do prazo:
+
+```json
+{ "version": 1, "dueDate": null }
+```
+
+Uma atualização contendo apenas `version` também incrementa a versão. O
+criador e a organização não são alteráveis pelo cliente. Ainda não existe
+endpoint para excluir tarefas.
 
 O Observe é configurado em `AppModule`; revise suas credenciais e política de
 telemetria antes de uso. Rate limiting, renovação de sessão e configuração
