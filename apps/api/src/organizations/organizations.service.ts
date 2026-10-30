@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { Prisma } from '../generated/prisma/client.js';
 import {
   AddMemberDto,
   OrganizationMemberRole,
@@ -24,9 +25,11 @@ export class OrganizationsService {
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
+      .replace(/^-|-$/g, '')
+      .slice(0, 71)
+      .replace(/-+$/g, '');
 
-    const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
+    const slug = `${baseSlug || 'organization'}-${crypto.randomUUID().slice(0, 8)}`;
 
     return this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -160,18 +163,29 @@ export class OrganizationsService {
       );
     }
 
-    const membership = await this.prisma.membership.create({
-      data: {
-        organizationId,
-        userId: user.id,
-        role: dto.role,
-      },
-      select: {
-        id: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    let membership;
+    try {
+      membership = await this.prisma.membership.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          role: dto.role,
+        },
+        select: {
+          id: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Esse usuário já pertence à organização.');
+      }
+      throw error;
+    }
 
     return {
       user,

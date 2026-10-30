@@ -10,6 +10,7 @@ import {
     Min,
     MinLength,
 } from 'class-validator';
+import { Trim } from '../../common/validation/trim.decorator.js';
 
 export enum TaskStatus {
     TODO = 'TODO',
@@ -19,12 +20,14 @@ export enum TaskStatus {
 }
 
 export class UpdateTaskDto {
+    @Trim()
     @IsOptional()
     @IsString()
     @MinLength(3)
     @MaxLength(180)
     title?: string;
 
+    @Trim()
     @IsOptional()
     @IsString()
     @MaxLength(5000)

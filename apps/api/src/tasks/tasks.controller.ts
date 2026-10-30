@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
@@ -29,7 +30,7 @@ export class TasksController {
 
   @Post()
   create(
-    @Param('organizationId') organizationId: string,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateTaskDto,
   ) {

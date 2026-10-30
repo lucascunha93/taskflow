@@ -1,5 +1,5 @@
 
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule, ObserveInstrument } from './app.module.js';
 
@@ -19,4 +19,11 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  Logger.error(
+    'Falha ao iniciar a aplicação.',
+    error instanceof Error ? error.stack : String(error),
+    'Bootstrap',
+  );
+  process.exitCode = 1;
+});

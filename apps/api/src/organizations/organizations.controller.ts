@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
@@ -47,7 +48,7 @@ export class OrganizationsController {
 
   @Post(':organizationId/members')
   addMember(
-    @Param('organizationId') organizationId: string,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: AddMemberDto,
   ) {
@@ -61,7 +62,7 @@ export class OrganizationsController {
 
   @Get(':organizationId/members')
   findMembers(
-    @Param('organizationId') organizationId: string,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.organizationsService.findMembers(
