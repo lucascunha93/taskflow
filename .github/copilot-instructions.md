@@ -1,239 +1,827 @@
-# Instruções do GitHub Copilot — TaskFlow
+# TaskFlow — Instruções de Desenvolvimento para GitHub Copilot
 
-Estas instruções definem os padrões de engenharia do TaskFlow. Siga-as ao gerar, revisar ou modificar código neste repositório. Se uma solicitação entrar em conflito com estas regras, priorize segurança, consistência de dados e o requisito explícito mais recente do usuário.
+## 1. Visão geral do projeto
 
-## 1. Contexto do produto
+O TaskFlow é uma plataforma SaaS B2B de gerenciamento de tarefas, desenvolvida para organizações que precisam organizar equipes, acompanhar atividades e gerenciar fluxos de trabalho.
 
-TaskFlow é um SaaS B2B para gestão de tarefas e operações empresariais, com:
-- Aplicação web para gestores.
-- Aplicativo mobile para colaboradores.
-- API REST própria.
-- Suporte a trabalho offline no mobile e sincronização confiável quando a conexão retornar.
-- Isolamento de dados entre organizações (multi-tenancy).
+O objetivo é construir um produto com qualidade comercial, arquitetura escalável, segurança, boa experiência de utilização e uma base técnica que demonstre domínio de desenvolvimento Full Stack moderno.
 
-O produto deve ter aparência e comportamento de um SaaS corporativo premium. Priorize clareza, acessibilidade, consistência visual, feedback de estado e fluxos previsíveis.
+O sistema deve possuir:
 
-## 2. Stack e arquitetura
+- Aplicação Web responsiva.
+- API REST.
+- Autenticação e autorização.
+- Gestão de organizações e membros.
+- Gestão de tarefas.
+- Controle de acesso por organização.
+- Estrutura preparada para planos e funcionalidades SaaS.
+- Aplicação mobile futuramente, com suporte a funcionamento offline e sincronização.
 
-Stack planejada:
-- Monorepo com npm workspaces, salvo decisão documentada em contrário.
-- `apps/api`: Node.js + TypeScript + NestJS.
-- `apps/web`: Angular + TypeScript.
-- `apps/mobile`: Ionic + Angular + Capacitor.
-- PostgreSQL como banco central.
-- Prisma ORM e migrations.
-- SQLite no dispositivo mobile para cache e fila offline.
-- Docker Compose para ambiente local.
-- OpenAPI/Swagger para documentar a API.
-- GitHub Actions para CI.
+**Importante:** não implementar funcionalidades apenas para demonstrar tecnologia. Cada decisão deve contribuir para um produto utilizável e coerente.
 
-Use um **monólito modular** no backend. Não crie microserviços, filas externas ou infraestrutura adicional sem uma necessidade concreta e documentada.
+---
 
-## 3. Estrutura esperada
+## 2. Diretrizes obrigatórias para o Copilot
+
+Antes de implementar qualquer funcionalidade:
+
+1. Analise a estrutura atual do repositório.
+2. Leia este documento e os arquivos de instruções existentes.
+3. Verifique os módulos, serviços, DTOs, modelos e convenções já implementados.
+4. Reutilize o código existente sempre que possível.
+5. Não recrie funcionalidades que já existem.
+6. Não altere contratos da API sem avaliar os impactos no restante do sistema.
+7. Não invente funcionalidades ou regras de negócio sem justificativa.
+8. Não utilize dados fictícios como se fossem dados reais.
+9. Não deixe implementações incompletas, métodos vazios ou comentários TODO como substitutos de funcionalidades solicitadas.
+10. Após cada etapa, execute os testes e a compilação.
+
+### Forma de trabalho
+
+O desenvolvimento deve ser incremental.
+
+- Implemente uma funcionalidade por vez.
+- Separe responsabilidades em componentes, serviços e módulos.
+- Evite arquivos excessivamente grandes.
+- Não faça refatorações amplas sem necessidade.
+- Explique brevemente as decisões técnicas relevantes.
+- Informe quais arquivos foram criados ou modificados.
+- Execute os testes correspondentes antes de considerar uma etapa concluída.
+
+Não implemente todo o projeto de uma só vez. Primeiro apresente uma sequência de etapas coerente e depois desenvolva cada uma individualmente.
+
+---
+
+## 3. Arquitetura do repositório
+
+O projeto utiliza um monorepositório com npm workspaces.
+
+Estrutura esperada:
 
 ```text
-apps/
-  api/
-    src/
-      common/       # guards, decorators, filters e interceptors reutilizáveis
-      config/
-      database/
-      modules/
-        auth/
-        organizations/
-        memberships/
-        tasks/
-        sync/
-        audit/
-    test/
-  web/
-    src/app/
-      core/
-      shared/
-      features/
-  mobile/
-    src/app/
-      core/
-      shared/
-      features/
-packages/
-  api-contracts/
-prisma/
-  schema.prisma
-  migrations/
-infra/
-  docker/
-  scripts/
-.github/
-  copilot-instructions.md
-  workflows/
-README.md
+taskflow/
+├── apps/
+│   ├── api/
+│   │   ├── prisma/
+│   │   ├── src/
+│   │   ├── test/
+│   │   └── package.json
+│   │
+│   ├── web/
+│   │   ├── src/
+│   │   ├── public/
+│   │   └── package.json
+│   │
+│   └── mobile/              # Futuro
+│
+├── packages/
+│   ├── shared-types/        # Futuro, se necessário
+│   └── shared-utils/        # Futuro, se necessário
+│
+├── .github/
+│   └── copilot-instructions.md
+│
+├── package.json
+└── README.md
 ```
 
-A estrutura pode evoluir, mas mudanças estruturais devem preservar limites claros entre domínios. Não crie abstrações genéricas antes de existir mais de um caso de uso que as justifique.
+Não criar pacotes compartilhados prematuramente. Eles devem existir somente quando houver uma necessidade real de compartilhamento entre aplicações.
 
-## 4. Princípios obrigatórios de engenharia
+---
 
-1. **TypeScript estrito:** evite `any`; prefira tipos explícitos, `unknown` com narrowing e contratos bem definidos.
-2. **Separação de responsabilidades:** controllers tratam HTTP; serviços implementam casos de uso; repositórios/acesso a dados ficam isolados quando isso trouxer valor real.
-3. **Validação na fronteira:** valide todos os parâmetros, query strings e corpos de requisição recebidos pela API.
-4. **Erros consistentes:** use códigos HTTP corretos e um formato de erro documentado. Nunca exponha stack traces, segredos ou detalhes internos ao cliente.
-5. **Código simples:** aplique SOLID e padrões apenas quando ajudarem a clareza, testabilidade ou evolução.
-6. **Sem duplicação evitável:** reutilize regras de domínio, mas não acople web e mobile a componentes de interface compartilhados.
-7. **Documentação:** atualize README, OpenAPI e exemplos quando contratos ou comandos mudarem.
-8. **Sem funcionalidades fictícias:** não crie mocks ou dados simulados em produção sem identificá-los claramente como dados de demonstração.
-9. **Dependências:** prefira dependências mantidas e justificadas. Não adicione uma biblioteca para resolver algo trivial sem explicar o benefício.
-10. **Mudanças focadas:** não reescreva módulos não relacionados à solicitação.
+## 4. Backend — API
 
-## 5. Segurança e multi-tenancy
+### Tecnologias
 
-- Toda consulta e mutação de dados pertencentes a uma organização deve ser limitada ao contexto da organização autenticada e validada no servidor.
-- Nunca confie em `organizationId`, `userId`, papel ou permissões enviados pelo cliente sem validar a associação no backend.
-- O isolamento não pode depender apenas da interface ou de filtros no frontend.
-- Use RBAC inicial com `admin`, `manager` e `member`, combinado com autorização sobre o recurso e a ação solicitada.
-- Verifique propriedade e organização do recurso em cada endpoint relevante.
-- Armazene senhas usando Argon2id ou uma alternativa segura e bem configurada.
-- Não armazene segredos, senhas ou tokens em arquivos versionados.
-- Nunca registre tokens, senhas ou dados pessoais desnecessários em logs.
-- Proteja endpoints sensíveis contra abuso com rate limiting.
-- Para web, avalie CSRF de acordo com o mecanismo de sessão/cookies adotado.
-- Para mobile, use armazenamento seguro nativo para refresh tokens; não use `localStorage` ou preferências comuns para segredos.
-- Dados locais devem ser removidos ou isolados corretamente em logout, troca de conta ou troca de organização.
-- Inclua testes negativos para tentativas de acesso cruzado entre organizações.
+- Node.js 24.
+- NestJS.
+- TypeScript com strict mode.
+- ESM.
+- Prisma ORM.
+- PostgreSQL.
+- JWT.
+- Argon2id.
+- class-validator.
+- Vitest.
 
-## 6. API REST
+### Arquitetura
 
-- Prefixo de API: `/api/v1`.
-- Use nomes de recursos consistentes e métodos HTTP semanticamente corretos.
-- Documente contratos em OpenAPI.
-- Valide paginação, filtros e ordenação; imponha limites máximos.
-- Não exponha diretamente entidades internas do Prisma como contratos públicos.
-- Use DTOs/schemas explícitos para entrada e saída.
-- Para atualizações concorrentes, use versionamento otimista quando aplicável.
-- Mudanças de status de tarefa devem passar por regras de domínio explícitas; não aceite qualquer transição por um `PATCH` genérico.
-- Use UTC em timestamps de servidor e ISO 8601 nas APIs.
-- Mudanças incompatíveis no contrato exigem decisão e documentação explícitas.
+Manter a arquitetura modular do NestJS.
 
-Endpoints planejados para o MVP:
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/auth/me`
-- `POST /api/v1/organizations`
-- `GET /api/v1/organizations/current`
-- `GET /api/v1/organizations/current/members`
-- `POST /api/v1/tasks`
-- `GET /api/v1/tasks`
-- `GET /api/v1/tasks/:taskId`
-- `PATCH /api/v1/tasks/:taskId`
-- `POST /api/v1/tasks/:taskId/transitions`
-- `GET /api/v1/tasks/:taskId/events`
-- `POST /api/v1/sync/push`
-- `GET /api/v1/sync/pull`
-- `GET /api/v1/dashboard/summary`
+Cada domínio deve possuir suas próprias responsabilidades:
 
-A lista é uma referência inicial, não autorização para implementar todos os endpoints de uma vez. Desenvolva por fluxo vertical e mantenha a documentação sincronizada.
+```text
+src/
+├── auth/
+├── organizations/
+├── tasks/
+├── prisma/
+├── observe/
+├── app.module.ts
+└── main.ts
+```
 
-## 7. Modelo de domínio
+Organizar cada módulo em:
 
-Entidades iniciais:
-- `Organization`: organização cliente.
-- `User`: identidade global.
-- `Membership`: associação usuário-organização, papel e estado.
-- `Task`: tarefa, organização, criador, responsável, prioridade, status, prazo e versão.
-- `ChecklistItem`: item de checklist associado à tarefa.
-- `TaskEvent`: trilha de auditoria de alterações relevantes.
-- `SyncOperation`: registro de idempotência das operações recebidas do mobile.
+- Controller: exposição dos endpoints.
+- Service: regras de negócio.
+- DTO: validação dos dados de entrada.
+- Guard: proteção de rotas, quando necessário.
+- Outros componentes: somente quando houver necessidade.
 
-Regras:
-- Use UUIDs para entidades que precisem ser criadas offline.
-- Crie constraints e índices para integridade e consultas frequentes.
-- Uma tarefa deve pertencer a uma única organização.
-- Atribuições e relações devem validar o escopo da organização.
-- A auditoria é produzida pelo servidor e não pode ser editada livremente pelo cliente.
-- Não remova dados de forma que quebre a sincronização; avalie tombstones/eventos de exclusão para dados replicados em dispositivos.
+### Regras de implementação
 
-## 8. Regras de sincronização offline — críticas
+- Controllers não devem concentrar regras de negócio.
+- Serviços devem centralizar a lógica de domínio.
+- Utilizar DTOs para validar entradas.
+- Utilizar tratamento adequado de exceções HTTP.
+- Evitar consultas desnecessárias ao banco.
+- Utilizar transações quando houver operações dependentes.
+- Evitar retornar entidades com informações sensíveis.
+- Não utilizar `any` sem justificativa técnica.
+- Manter TypeScript strict.
+- Utilizar imports compatíveis com ESM e NodeNext.
 
-O mobile deve salvar primeiro a alteração no SQLite e depois tentar sincronizá-la. Não dependa de uma chamada de rede para persistir uma ação do usuário.
+### Segurança
 
-- Mantenha uma fila durável de operações pendentes.
-- Cada operação tem `operationId` único e estável entre tentativas.
-- A API deve aplicar idempotência no servidor usando constraint de unicidade e transação; uma consulta prévia isolada não é suficiente.
-- A mudança de domínio, o evento de auditoria e o resultado idempotente devem ser persistidos atomicamente quando fizerem parte da mesma operação.
-- Use `baseVersion`/versão de entidade para detectar alterações concorrentes.
-- Não use “última gravação vence” indiscriminadamente.
-- Trate resultados individuais por operação: `applied`, `already_applied`, `conflict` ou `rejected` (ou enum equivalente documentado).
-- Retentativas devem usar backoff exponencial com jitter e limites razoáveis.
-- Falhas de rede não devem apagar operações pendentes.
-- O cursor de pull deve ser opaco e desenhado para não perder mudanças confirmadas; não use apenas `updated_at` como cursor sem garantir ordenação consistente.
-- Respeite permissões e escopo de organização tanto no push quanto no pull.
-- Considere logout, troca de usuário/organização, remoções de acesso, exclusões e dados obsoletos no dispositivo.
-- Nunca alegue “sincronizado” antes de o servidor confirmar o resultado.
-- Crie testes para duplicação, respostas perdidas, operações fora de ordem, conflitos, rejeições e reinicialização do aplicativo.
+- Nunca armazenar senhas em texto puro.
+- Utilizar Argon2id para hashing.
+- Proteger rotas com autenticação.
+- Validar autorização no backend, nunca apenas no frontend.
+- Não confiar em IDs de usuário enviados pelo cliente.
+- Validar a associação dos usuários à organização.
+- Não expor hashes, tokens ou segredos nas respostas.
+- Tratar corretamente erros de autenticação e autorização.
 
-## 9. Frontend Angular e Ionic
+### Multi-tenancy
 
-- Organize código por funcionalidade/domínio (`features`), com `core` para serviços singleton e infraestrutura e `shared` para elementos realmente reutilizáveis.
-- Prefira componentes pequenos e com responsabilidades claras.
-- Use Signals para estado local síncrono quando apropriado e RxJS para fluxos assíncronos/eventos.
-- Evite subscriptions sem necessidade; gerencie corretamente o ciclo de vida e cancelamento.
-- Use formulários reativos e validação coerente com a API.
-- Implemente estados de carregamento, erro, vazio, sucesso e offline; não deixe ações sem feedback.
-- Garanta responsividade, navegação por teclado, labels acessíveis e contraste adequado.
-- Não trate a interface como fronteira de segurança: todas as regras de autorização também devem existir no backend.
-- No mobile, torne visível o estado da fila: pendente, sincronizando, sincronizado, conflito ou falha.
-- Não assuma que o aplicativo estará sempre online ou que eventos de rede são infalíveis.
+O TaskFlow é uma aplicação multi-tenant.
 
-## 10. Testes e definição de pronto
+Uma organização representa um tenant.
 
-Ao implementar uma funcionalidade:
-- Adicione testes unitários para regras de negócio relevantes.
-- Adicione testes de integração para persistência, autorização e transações quando aplicável.
-- Teste casos negativos, limites e falhas, não apenas o caminho feliz.
-- Para mudanças de API, atualize OpenAPI e contratos.
-- Para mudanças de banco, crie migration versionada; não dependa de alteração manual do banco.
-- Execute lint, typecheck, testes e build pertinentes antes de declarar a tarefa concluída.
-- Nunca afirme que testes passaram se não foram executados.
-- Não diminua a qualidade ou remova testes para fazer o pipeline passar sem entender a causa.
+Toda operação que envolva dados de uma organização deve verificar a associação do usuário com ela.
 
-Definição de pronto:
-1. Funcionalidade atende aos critérios de aceite.
-2. Validação e autorização estão no servidor.
-3. Erros e estados de interface são tratados.
-4. Testes relevantes foram adicionados e executados.
-5. Documentação/contratos foram atualizados.
-6. Não há segredos ou dados reais sensíveis no repositório.
+**Regra fundamental:** nenhuma consulta ou alteração de tarefas pode permitir acesso a dados de outra organização.
 
-## 11. Docker, configuração e execução
+O `organizationId` deve ser validado no backend e não pode ser considerado confiável apenas porque veio da rota.
 
-- Mantenha segredos em variáveis de ambiente não versionadas.
-- Forneça `.env.example` com valores fictícios e nomes de variáveis documentados.
-- Não inclua `.env` real no Git.
-- Docker Compose deve permitir iniciar os serviços necessários para desenvolvimento local.
-- Use migrations explícitas para preparar o banco.
-- Documente comandos para instalar, executar, testar e reconstruir o ambiente.
-- Configure health checks quando apropriado e aguarde dependências prontas nos scripts de inicialização.
+---
 
-## 12. Como o Copilot deve trabalhar
+## 5. Estado atual do backend
 
-Ao receber uma solicitação:
-1. Inspecione a estrutura e os padrões já existentes antes de propor mudanças.
-2. Identifique o fluxo de negócio e os módulos afetados.
-3. Faça a menor alteração coerente que resolva o problema.
-4. Considere segurança, multi-tenancy, offline e compatibilidade de contratos.
-5. Adicione ou atualize testes.
-6. Atualize documentação quando necessário.
-7. Resuma arquivos alterados, decisões, comandos de teste executados e limitações conhecidas.
-8. Se faltar informação importante, explicite a suposição; não invente requisitos ou resultados.
-9. Não gere toda a aplicação em uma única mudança. Prefira entregas pequenas, compiláveis e verificáveis.
-10. Não adicione serviços ou tecnologias fora da stack aprovada sem apresentar a justificativa.
+O Copilot deve considerar que já existem implementações em andamento e evoluí-las em vez de substituí-las.
 
-## 13. Idioma e documentação
+### Prisma
 
-- Documentação do projeto, comentários explicativos e mensagens para o time: português brasileiro.
-- Identificadores, nomes de classes, funções, variáveis, endpoints e tipos: inglês.
-- Mensagens visíveis ao usuário final: português brasileiro no MVP, com estrutura que permita internacionalização futura.
-- Use linguagem técnica clara, sem prometer escalabilidade, segurança ou disponibilidade que não tenham sido demonstradas.
+O projeto já utiliza PostgreSQL e Prisma 7, com adapter para PostgreSQL.
 
-Estas instruções são a referência padrão do repositório e devem evoluir junto com as decisões arquiteturais do TaskFlow.
+Existem os seguintes modelos:
+
+- Organization
+- User
+- Membership
+- Task
+
+Também existem enums:
+
+- OrganizationRole: OWNER, ADMIN, MEMBER.
+- TaskStatus: TODO, IN_PROGRESS, DONE, CANCELLED.
+
+O modelo Task já contempla:
+
+- Identificador.
+- Título.
+- Descrição.
+- Organização.
+- Criador.
+- Responsável.
+- Status.
+- Versão para controle de concorrência.
+- Data de vencimento.
+- Datas de criação e atualização.
+
+Não modificar o schema sem avaliar migrações, compatibilidade e impacto nas funcionalidades existentes.
+
+### Autenticação
+
+Já implementado:
+
+- Cadastro de usuários.
+- Login.
+- Hash de senha com Argon2id.
+- Emissão de JWT.
+- Endpoint de perfil autenticado.
+- Guard de autenticação.
+
+Endpoints:
+
+```http
+POST /auth/register
+POST /auth/login
+GET  /auth/me
+```
+
+### Organizações
+
+Já implementado:
+
+- Criação de organização.
+- Criação automática de associação OWNER.
+- Listagem das organizações do usuário.
+- Inclusão de membros.
+- Listagem de membros.
+- Controle de permissões para inclusão de membros.
+
+Endpoints:
+
+```http
+POST /organizations
+GET  /organizations
+POST /organizations/:organizationId/members
+GET  /organizations/:organizationId/members
+```
+
+### Tarefas
+
+O módulo de tarefas está em implementação.
+
+Já existe a estrutura inicial de:
+
+- TasksModule.
+- TasksController.
+- TasksService.
+- CreateTaskDto.
+- UpdateTaskDto.
+
+A criação de tarefas está sendo implementada com validação de associação à organização.
+
+O Copilot deve verificar a implementação atual antes de continuar.
+
+---
+
+## 6. Funcionalidades que faltam no backend
+
+Desenvolver incrementalmente:
+
+### Gestão de tarefas
+
+- Criar tarefa.
+- Listar tarefas de uma organização.
+- Buscar tarefa por identificador.
+- Atualizar tarefa.
+- Alterar status.
+- Atribuir responsável.
+- Remover responsável.
+- Definir prazo.
+- Excluir tarefa.
+- Filtrar por status.
+- Filtrar por responsável.
+- Filtrar por período.
+- Pesquisar por título.
+- Ordenar resultados.
+- Paginar resultados.
+
+### Regras de negócio
+
+- Um usuário só pode consultar tarefas de organizações das quais participa.
+- O responsável precisa ser membro da organização.
+- O criador deve ser identificado pelo JWT.
+- O cliente não pode definir livremente o criador.
+- A atualização deve respeitar o controle de versão da tarefa.
+- Implementar concorrência otimista utilizando o campo `version`.
+- Uma atualização com versão desatualizada deve retornar conflito HTTP 409.
+- A exclusão deve respeitar as regras de autorização.
+
+### Evoluções futuras
+
+Depois das funcionalidades principais:
+
+- Histórico de alterações.
+- Comentários em tarefas.
+- Notificações.
+- Anexos.
+- Atividades recentes.
+- Dashboard.
+- Gestão de projetos e quadros.
+- Permissões mais granulares.
+- Planos e limites SaaS.
+
+Não implementar essas evoluções antes de concluir e testar o fluxo principal.
+
+---
+
+# 7. Frontend — Angular
+
+## Tecnologias obrigatórias
+
+Utilizar:
+
+- Angular na versão estável mais recente disponível no momento da implementação.
+- TypeScript strict.
+- Standalone Components.
+- Angular Router.
+- Signals.
+- Reactive Forms tipados.
+- HttpClient.
+- Functional Interceptors.
+- Functional Guards.
+- Lazy Loading.
+- Componentes reutilizáveis.
+- SCSS.
+
+Antes de iniciar, verificar a versão estável do Angular e compatibilidade com Node.js e TypeScript.
+
+Não utilizar versões beta, release candidates ou APIs experimentais em funcionalidades essenciais.
+
+## Filosofia de desenvolvimento Angular
+
+O projeto deve utilizar os conceitos e as sintaxes modernas do Angular.
+
+Priorizar:
+
+- Componentes standalone.
+- `signal()`.
+- `computed()`.
+- `effect()` somente quando realmente necessário.
+- `input()` e `output()`.
+- `model()` quando houver necessidade de two-way binding em componentes.
+- `@if`.
+- `@else`.
+- `@for`.
+- `@switch`.
+- `@defer` quando houver benefício real.
+- `inject()` para injeção de dependências.
+- Typed Reactive Forms.
+- Functional Interceptors.
+- Functional Guards.
+- Lazy Loading.
+- Change Detection moderna.
+- Arquitetura baseada em features.
+
+### Sintaxe moderna de templates
+
+Utilizar:
+
+```html
+@if (loading()) {
+  <app-loading />
+} @else if (tasks().length > 0) {
+  @for (task of tasks(); track task.id) {
+    <app-task-card [task]="task" />
+  }
+} @else {
+  <app-empty-state />
+}
+```
+
+Não utilizar a sintaxe estrutural antiga `*ngIf`, `*ngFor` ou `*ngSwitch` em novos componentes.
+
+### Signals
+
+Utilizar Signals para estados locais e estados de interface.
+
+Exemplo:
+
+```typescript
+import { computed, signal } from '@angular/core';
+
+export class TaskListComponent {
+  readonly tasks = signal<Task[]>([]);
+
+  readonly completedTasks = computed(() =>
+    this.tasks().filter(task => task.status === 'DONE'),
+  );
+
+  readonly pendingTasks = computed(() =>
+    this.tasks().filter(task => task.status !== 'DONE'),
+  );
+}
+```
+
+Não utilizar Signals indiscriminadamente.
+
+Para fluxos assíncronos complexos, eventos e operações reativas, utilizar RxJS quando fizer sentido.
+
+### Componentes
+
+Utilizar `input()` e `output()` nos novos componentes, conforme a necessidade.
+
+Exemplo:
+
+```typescript
+import { Component, input, output } from '@angular/core';
+
+@Component({
+  selector: 'app-task-card',
+  standalone: true,
+  templateUrl: './task-card.component.html',
+})
+export class TaskCardComponent {
+  readonly task = input.required<Task>();
+
+  readonly edit = output<Task>();
+}
+```
+
+Evitar componentes gigantescos.
+
+Um componente deve ter uma responsabilidade clara.
+
+### Estado e comunicação
+
+- Serviços devem centralizar comunicação com a API.
+- Componentes não devem realizar chamadas HTTP diretamente.
+- Utilizar Signals para estados de interface.
+- Utilizar RxJS para operações assíncronas quando apropriado.
+- Evitar duplicação de estado.
+- Evitar serviços globais com responsabilidades excessivas.
+- Não introduzir bibliotecas de gerenciamento de estado sem necessidade real.
+
+### Formulários
+
+Utilizar Reactive Forms tipados.
+
+Validar no frontend para melhorar a experiência, mas sempre validar novamente no backend.
+
+Criar componentes reutilizáveis para campos, mensagens de validação e estados de formulário quando isso reduzir duplicação.
+
+### HTTP
+
+Criar uma camada organizada de comunicação com a API.
+
+Implementar:
+
+- Interceptor de autenticação.
+- Tratamento centralizado de erros.
+- Tratamento de sessão expirada.
+- Tipagem das respostas.
+- Loading states.
+- Tratamento de erros de rede.
+
+Nunca armazenar segredos no frontend.
+
+Não presumir que esconder um botão significa que o usuário não possui permissão. A API continua sendo responsável pela autorização.
+
+---
+
+## 8. Organização do frontend
+
+Estrutura inicial sugerida:
+
+```text
+apps/web/src/app/
+├── core/
+│   ├── auth/
+│   ├── guards/
+│   ├── interceptors/
+│   ├── services/
+│   └── layout/
+│
+├── shared/
+│   ├── components/
+│   ├── directives/
+│   ├── pipes/
+│   └── utils/
+│
+├── features/
+│   ├── authentication/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── services/
+│   │
+│   ├── dashboard/
+│   │   ├── pages/
+│   │   └── components/
+│   │
+│   ├── organizations/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── services/
+│   │
+│   ├── tasks/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── services/
+│   │   └── models/
+│   │
+│   └── members/
+│       ├── pages/
+│       ├── components/
+│       └── services/
+│
+├── app.config.ts
+├── app.routes.ts
+└── app.component.ts
+```
+
+A estrutura pode ser ajustada conforme o crescimento do projeto, desde que mantenha separação por domínio e responsabilidade.
+
+---
+
+# 9. Experiência visual e interface
+
+O TaskFlow deve apresentar uma experiência visual de produto SaaS profissional.
+
+Referências de qualidade:
+
+- Linear.
+- Notion.
+- ClickUp.
+- Asana.
+- Monday.com.
+
+Essas referências servem como inspiração de usabilidade e organização, não para copiar interfaces ou identidade visual.
+
+### Diretrizes visuais
+
+- Interface limpa e moderna.
+- Hierarquia visual clara.
+- Espaçamento consistente.
+- Tipografia profissional.
+- Componentes padronizados.
+- Feedback visual para ações.
+- Estados de carregamento.
+- Estados vazios.
+- Mensagens de erro claras.
+- Responsividade.
+- Acessibilidade.
+
+Evitar:
+
+- Aparência de painel administrativo genérico.
+- Excesso de cores.
+- Gradientes exagerados.
+- Muitos cards sem propósito.
+- Ícones inconsistentes.
+- Botões sem feedback.
+- Interfaces com aparência de protótipo.
+
+### Layout principal
+
+A aplicação autenticada deve possuir:
+
+- Sidebar com navegação.
+- Identificação da organização atual.
+- Área principal de conteúdo.
+- Menu do usuário.
+- Acesso às configurações.
+- Layout responsivo para dispositivos menores.
+
+### Páginas principais
+
+1. Login.
+2. Cadastro.
+3. Seleção/criação de organização.
+4. Dashboard.
+5. Lista de tarefas.
+6. Detalhes da tarefa.
+7. Criação e edição de tarefas.
+8. Gestão de membros.
+9. Configurações da organização.
+10. Perfil do usuário.
+
+---
+
+# 10. Autenticação e navegação
+
+Implementar o fluxo:
+
+1. Usuário acessa a aplicação.
+2. Caso não esteja autenticado, é direcionado ao login.
+3. Após autenticação, o frontend consulta `/auth/me`.
+4. O usuário consulta suas organizações.
+5. Caso não tenha organização, é direcionado para criar uma.
+6. Caso tenha uma organização, pode selecioná-la.
+7. A organização selecionada passa a ser o contexto de navegação.
+8. As chamadas de tarefas utilizam o identificador da organização selecionada.
+
+Criar guards funcionais para proteger rotas.
+
+Criar interceptor funcional para adicionar o Bearer Token.
+
+Tratar sessão expirada de forma consistente.
+
+A estratégia de armazenamento de tokens deve considerar os riscos de XSS e as limitações da arquitetura atual. Avaliar uma evolução para cookies HttpOnly, Secure e SameSite antes de uma publicação em produção. Não apresentar localStorage como armazenamento seguro por padrão.
+
+---
+
+# 11. Integração entre frontend e backend
+
+O frontend deve consumir exclusivamente a API.
+
+Não acessar o banco diretamente.
+
+Centralizar a URL da API em configuração de ambiente.
+
+Criar modelos TypeScript alinhados aos contratos reais do backend.
+
+Evitar duplicar regras de negócio no frontend.
+
+Não inventar endpoints. Conferir os controllers existentes antes de implementar cada integração.
+
+Se um endpoint necessário ainda não existir:
+
+1. Identificar a necessidade.
+2. Implementar o endpoint no backend.
+3. Validar sua autorização.
+4. Testar a API.
+5. Integrar o frontend.
+
+---
+
+# 12. Qualidade e testes
+
+A qualidade deve ser tratada como parte da implementação.
+
+### Backend
+
+- Testes unitários dos serviços.
+- Testes dos controllers quando apropriado.
+- Testes de integração.
+- Testes de autenticação.
+- Testes de autorização.
+- Testes de isolamento entre organizações.
+- Testes de concorrência otimista.
+
+### Frontend
+
+- Testes unitários dos serviços.
+- Testes de componentes.
+- Testes de formulários.
+- Testes de guards.
+- Testes de interceptors.
+- Testes dos principais fluxos de navegação.
+- Testes de integração quando apropriado.
+
+### Regras
+
+- Não considerar uma funcionalidade pronta sem testes relevantes.
+- Não remover testes para fazer a compilação passar.
+- Não ignorar erros de TypeScript.
+- Não desabilitar regras do ESLint sem justificativa.
+- Não utilizar mocks para mascarar falhas de integração.
+
+---
+
+# 13. Performance e escalabilidade
+
+Considerar desde o início:
+
+- Paginação no backend.
+- Índices adequados no banco.
+- Consultas eficientes.
+- Lazy Loading no Angular.
+- Evitar renderizações desnecessárias.
+- Evitar chamadas HTTP repetidas.
+- Cache somente quando houver estratégia clara.
+- Controle de concorrência.
+- Logs estruturados.
+- Observabilidade.
+- Tratamento de erros.
+
+Não implementar otimizações prematuras sem identificar um problema ou necessidade.
+
+---
+
+# 14. Segurança e produção
+
+Antes de disponibilizar o sistema publicamente, avaliar:
+
+- Rate limiting.
+- CORS restritivo.
+- Helmet.
+- Validação de variáveis de ambiente.
+- Gestão segura de segredos.
+- Política de expiração e renovação de tokens.
+- Proteção contra brute force.
+- Proteção contra XSS e CSRF conforme a estratégia de autenticação.
+- Logs sem informações sensíveis.
+- Backup do PostgreSQL.
+- Migrações de banco controladas.
+- Health checks.
+- Monitoramento de erros.
+
+Nunca versionar `.env`, credenciais ou tokens.
+
+---
+
+# 15. Roadmap de desenvolvimento
+
+Seguir esta sequência, validando cada etapa antes de avançar.
+
+## Fase 1 — Finalização do backend principal
+
+- CRUD completo de tarefas.
+- Filtros e paginação.
+- Validação de responsáveis.
+- Controle de permissões.
+- Controle de concorrência.
+- Testes de isolamento multi-tenant.
+
+## Fase 2 — Estrutura do Angular
+
+- Criar aplicação Angular.
+- Configurar TypeScript strict.
+- Configurar SCSS.
+- Configurar rotas.
+- Criar estrutura por features.
+- Criar layout principal.
+- Criar componentes compartilhados.
+
+## Fase 3 — Autenticação
+
+- Login.
+- Cadastro.
+- Interceptor.
+- Guards.
+- Recuperação do perfil.
+- Tratamento de sessão.
+
+## Fase 4 — Organizações
+
+- Listagem.
+- Criação.
+- Seleção de organização.
+- Listagem de membros.
+- Inclusão de membros.
+- Controle visual de permissões.
+
+## Fase 5 — Tarefas
+
+- Listagem.
+- Criação.
+- Edição.
+- Exclusão.
+- Alteração de status.
+- Atribuição de responsáveis.
+- Filtros.
+- Paginação.
+
+## Fase 6 — Dashboard
+
+- Resumo de tarefas.
+- Tarefas pendentes.
+- Tarefas concluídas.
+- Tarefas atrasadas.
+- Distribuição por status.
+- Atividades recentes, quando houver suporte no backend.
+
+Os indicadores devem ser calculados a partir de dados reais.
+
+## Fase 7 — Qualidade e acabamento
+
+- Testes.
+- Responsividade.
+- Acessibilidade.
+- Performance.
+- Tratamento de erros.
+- Revisão de segurança.
+- Documentação.
+
+## Fase 8 — Evoluções do produto
+
+- Comentários.
+- Histórico.
+- Notificações.
+- Projetos e quadros.
+- Anexos.
+- Funcionalidades SaaS.
+- Aplicação mobile.
+- Funcionamento offline e sincronização.
+
+---
+
+# 16. Critérios de conclusão
+
+Uma funcionalidade somente pode ser considerada concluída quando:
+
+- Está implementada.
+- Está integrada ao restante do sistema.
+- Possui validação adequada.
+- Respeita as permissões.
+- Não compromete o isolamento entre organizações.
+- Possui tratamento de erros.
+- Possui testes relevantes.
+- O projeto compila.
+- A documentação foi atualizada quando necessário.
+
+---
+
+# 17. Primeira instrução para o Copilot
+
+Ao receber este documento pela primeira vez, NÃO comece a implementar todas as funcionalidades.
+
+Primeiro:
+
+1. Analise o repositório completo.
+2. Identifique o que já está implementado.
+3. Verifique o estado atual do backend.
+4. Verifique a configuração do monorepositório.
+5. Verifique se a aplicação Angular já existe.
+6. Identifique inconsistências entre o código e este documento.
+7. Apresente um diagnóstico objetivo.
+8. Sugira a próxima etapa de desenvolvimento.
+
+Aguarde a aprovação antes de executar mudanças estruturais.
+
+**Objetivo final:** construir um SaaS B2B Full Stack profissional, seguro, escalável e com uma experiência de usuário de qualidade comercial, utilizando Angular moderno e NestJS com TypeScript.

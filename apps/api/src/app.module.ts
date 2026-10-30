@@ -8,6 +8,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { HealthController } from './health/health.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { TasksModule } from './tasks/tasks.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
       serviceId: 'api',
     }),
     OrganizationsModule,
+    TasksModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
