@@ -1,0 +1,65 @@
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="busy()">
+  <fieldset [disabled]="busy() || locked()">
+    <div class="field">
+      <label for="task-title">Título</label>
+      <input id="task-title" class="tf-field" formControlName="title" maxlength="180"
+        [attr.aria-invalid]="form.controls.title.touched && form.controls.title.invalid"
+        [attr.aria-describedby]="form.controls.title.touched && form.controls.title.invalid ? 'task-title-error' : null" />
+      @if (form.controls.title.touched && form.controls.title.invalid) {
+        <p id="task-title-error" class="field-error">Informe um título com 3 a 180 caracteres, sem contar espaços nas extremidades.</p>
+      }
+    </div>
+    <div class="field">
+      <label for="task-description">Descrição <span>(opcional)</span></label>
+      <textarea id="task-description" class="tf-field" formControlName="description" rows="4" maxlength="5000"
+        [attr.aria-invalid]="form.controls.description.touched && form.controls.description.invalid"
+        [attr.aria-describedby]="form.controls.description.touched && form.controls.description.invalid ? 'task-description-error' : null"></textarea>
+      @if (form.controls.description.touched && form.controls.description.invalid) {
+        <p id="task-description-error" class="field-error">A descrição deve ter no máximo 5.000 caracteres.</p>
+      }
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="task-status">Status</label>
+        <select id="task-status" class="tf-field" formControlName="status">
+          @for (status of statuses; track status.value) { <option [value]="status.value">{{ status.label }}</option> }
+        </select>
+      </div>
+      <div class="field">
+        <label for="task-assignee">Responsável</label>
+        <select id="task-assignee" class="tf-field" formControlName="assigneeId" [attr.aria-describedby]="'task-assignee-hint'">
+          <option value="">Sem responsável</option>
+          @if (task()?.assignee; as assignee) {
+            @if (!members.members().some(isCurrentAssignee)) {
+              <option [value]="assignee.id">{{ assignee.name }} (atual)</option>
+            }
+          }
+          @for (member of members.members(); track member.user.id) {
+            <option [value]="member.user.id">{{ member.user.name }} — {{ member.user.email }}</option>
+          }
+        </select>
+        <p id="task-assignee-hint" class="hint">
+          @if (members.status() === 'loading') { Carregando membros… }
+          @else if (members.status() === 'error') { Não foi possível carregar os membros. }
+          @else { Apenas membros da organização podem ser responsáveis. }
+        </p>
+        @if (members.status() === 'error') {
+          <button type="button" class="tf-button tf-button--subtle" (click)="members.refresh()">Recarregar membros</button>
+        }
+      </div>
+    </div>
+    <div class="field">
+      <label for="task-due">Vencimento <span>(opcional, horário local)</span></label>
+      <input id="task-due" class="tf-field" type="datetime-local" formControlName="dueDate"
+        [attr.aria-invalid]="form.controls.dueDate.touched && form.controls.dueDate.invalid"
+        [attr.aria-describedby]="form.controls.dueDate.touched && form.controls.dueDate.invalid ? 'task-due-error' : null" />
+      @if (form.controls.dueDate.touched && form.controls.dueDate.invalid) {
+        <p id="task-due-error" class="field-error">Informe uma data válida.</p>
+      }
+    </div>
+  </fieldset>
+  <div class="actions">
+    <button class="tf-button" type="submit" [disabled]="busy() || locked()">{{ busy() ? 'Salvando…' : 'Salvar tarefa' }}</button>
+    <button class="tf-button tf-button--subtle" type="button" [disabled]="busy()" (click)="cancelled.emit()">Cancelar</button>
+  </div>
+</form>

@@ -74,6 +74,10 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
 
 A criação de tarefas valida a associação do solicitante e do responsável.
+O `POST` aceita `title`, `description`, `assigneeId`, `dueDate` e `status`
+opcional (`TODO`, `IN_PROGRESS`, `DONE` ou `CANCELLED`). Sem `status`, a
+tarefa é criada como `TODO`. A resposta de criação contém os campos da tarefa,
+mas não inclui os objetos `creator` e `assignee`.
 As consultas exigem associação à organização e retornam os campos da tarefa
 mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
 O detalhe retorna 404 para tarefa inexistente na organização, inclusive quando

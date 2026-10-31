@@ -1,0 +1,32 @@
+.page { max-width: 1000px; }
+.eyebrow { margin: 0 0 var(--space-3); color: var(--color-primary); font-size: var(--font-size-small); font-weight: 700; letter-spacing: 0.06em; }
+.page-heading { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-8); }
+h1 { margin: 0 0 var(--space-2); font-size: clamp(1.75rem, 3vw, 2.5rem); letter-spacing: -0.04em; }
+h2 { font-size: 1rem; }
+.description { margin: 0; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.editor { max-width: 760px; }
+.editor h2 { margin: 0 0 var(--space-5); font-size: 1.5rem; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: var(--space-3); margin-bottom: var(--space-6); }
+.filter { display: grid; gap: var(--space-2); min-width: 0; }
+.filter label { font-size: var(--font-size-small); font-weight: 600; color: var(--color-text-secondary); }
+.search { grid-column: span 2; }
+.list-heading { display: flex; justify-content: space-between; gap: var(--space-4); align-items: baseline; color: var(--color-text-secondary); }
+.list-heading h2 { color: var(--color-text); }
+.task-list { padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--color-border); }
+.task-row { display: flex; align-items: center; gap: var(--space-4); width: 100%; padding: var(--space-4) var(--space-2); border: 0; border-bottom: 1px solid var(--color-border); background: transparent; text-align: left; cursor: pointer; }
+.task-row:hover { background: var(--color-surface-hover); }
+.task-main { display: grid; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.task-main span, .task-date, .empty { color: var(--color-text-secondary); }
+.task-date { min-width: 130px; text-align: right; }
+.tf-badge { flex: 0 0 auto; }
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-6); }
+.message, .notice { margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-medium); }
+.message { background: #fff2f1; color: #8c252e; }
+.notice { background: var(--color-primary-soft); color: var(--color-primary); }
+a.tf-button { text-decoration: none; }
+@media (max-width: 480px) {
+  .search { grid-column: auto; }
+  .task-row { flex-wrap: wrap; }
+  .task-main { flex-basis: 100%; }
+  .task-date { flex: 1; min-width: 0; }
+}

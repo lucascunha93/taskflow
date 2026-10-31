@@ -10,6 +10,13 @@
       </li>
     }
     <li>
+      <a class="nav-item" routerLink="/tasks" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
+        (click)="navigated.emit()">
+        <app-icon name="tasks" />
+        <span>Todas as tarefas</span>
+      </a>
+    </li>
+    <li>
       <a class="nav-item" routerLink="/members" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
         (click)="navigated.emit()">
         <app-icon name="members" />

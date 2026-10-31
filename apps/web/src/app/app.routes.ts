@@ -13,6 +13,7 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', loadComponent: () => import('./features/organizations/organization-home.component').then((m) => m.OrganizationHomeComponent) },
       { path: 'organizations/new', loadComponent: () => import('./features/organizations/create-organization.component').then((m) => m.CreateOrganizationComponent) },
       { path: 'members', loadComponent: () => import('./features/members/members-page.component').then((m) => m.MembersPageComponent) },
+      { path: 'tasks', loadComponent: () => import('./features/tasks/tasks-page.component').then((m) => m.TasksPageComponent) },
     ],
   },
   { path: '**', redirectTo: '' },

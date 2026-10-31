@@ -1,0 +1,77 @@
+<section class="page">
+  <p class="eyebrow">ESPAÇO DE TRABALHO</p>
+  <div class="page-heading">
+    <div><h1>Tarefas</h1>@if (organizations.active(); as organization) { <p class="description">{{ organization.name }}</p> }</div>
+    @if (organizations.active() && !creating() && !selected()) {
+      <button type="button" class="tf-button" (click)="notice.set(''); creating.set(true)">Nova tarefa</button>
+    }
+  </div>
+  @if (organizations.active(); as organization) {
+    @if (!contextMatches()) {
+      <p role="status">Carregando tarefas…</p>
+    } @else if (creating()) {
+      <section class="editor" aria-labelledby="create-title">
+        <h2 id="create-title">Nova tarefa</h2>
+        @if (createError()) { <p class="message" role="alert">{{ createError() }}</p> }
+        <app-task-form [busy]="createBusy()" [locked]="createUncertain()" (submitted)="create($event)" (cancelled)="cancelCreate()" />
+      </section>
+    } @else if (selected(); as current) {
+      @if (current.organizationId === organization.id) {
+        <app-task-detail [taskId]="current.id" (closed)="selected.set(null)" (changed)="changed($event)" />
+      }
+    } @else {
+      @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+      <form class="filters" [formGroup]="filters" aria-label="Filtros de tarefas">
+        <div class="filter search"><label for="filter-search">Buscar por título</label><input id="filter-search" class="tf-field" formControlName="search" type="search" /></div>
+        <div class="filter"><label for="filter-status">Status</label><select id="filter-status" class="tf-field" formControlName="status"><option value="">Todos</option>@for (status of statuses; track status.value) { <option [value]="status.value">{{ status.label }}</option> }</select></div>
+        <div class="filter"><label for="filter-assignee">Responsável</label><select id="filter-assignee" class="tf-field" formControlName="assigneeId"><option value="">Todos</option>@for (person of filterPeople(); track person.id) { <option [value]="person.id">{{ person.name }}</option> }</select></div>
+        <div class="filter"><label for="filter-creator">Criador</label><select id="filter-creator" class="tf-field" formControlName="creatorId"><option value="">Todos</option>@for (person of filterPeople(); track person.id) { <option [value]="person.id">{{ person.name }}</option> }</select></div>
+        <div class="filter"><label for="filter-from">Vencimento de (UTC)</label><input id="filter-from" class="tf-field" type="date" formControlName="dueDateFrom" [attr.aria-describedby]="filterError() ? 'filter-error' : null" /></div>
+        <div class="filter"><label for="filter-to">Vencimento até (UTC)</label><input id="filter-to" class="tf-field" type="date" formControlName="dueDateTo" [attr.aria-describedby]="filterError() ? 'filter-error' : null" /></div>
+        <div class="filter"><label for="filter-sort">Ordenar por</label><select id="filter-sort" class="tf-field" formControlName="sortBy"><option value="updatedAt">Atualização</option><option value="createdAt">Criação</option><option value="dueDate">Vencimento</option><option value="title">Título</option></select></div>
+        <div class="filter"><label for="filter-order">Ordem</label><select id="filter-order" class="tf-field" formControlName="sortOrder"><option value="desc">Decrescente</option><option value="asc">Crescente</option></select></div>
+        <div class="filter"><label for="filter-limit">Por página</label><select id="filter-limit" class="tf-field" formControlName="limit"><option [ngValue]="20">20</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option></select></div>
+      </form>
+      @if (filterError()) { <p id="filter-error" class="message" role="alert">{{ filterError() }}</p> }
+      @if (members.status() === 'loading') { <p role="status">Carregando membros para os filtros…</p> }
+      @if (members.status() === 'error') {
+        <p class="message" role="alert">Não foi possível carregar os membros para os filtros.</p>
+        <button type="button" class="tf-button tf-button--subtle" (click)="members.refresh()">Recarregar membros</button>
+      }
+      @if (loading()) {
+        <p role="status">Carregando tarefas…</p>
+      } @else if (error()) {
+        <p class="message" role="alert">{{ error() }}</p>
+        <button type="button" class="tf-button tf-button--subtle" (click)="refresh()">Tentar novamente</button>
+      } @else if (visiblePage(); as result) {
+        <div class="list-heading"><h2>Resultados</h2><span>{{ result.meta.total }} {{ result.meta.total === 1 ? 'tarefa' : 'tarefas' }}</span></div>
+        @if (result.data.length === 0) {
+          <p class="empty">Nenhuma tarefa encontrada para os filtros atuais.</p>
+        } @else {
+          <ul class="task-list">
+            @for (task of result.data; track task.id) {
+              <li><button type="button" class="task-row" (click)="open(task.id)">
+                <span class="task-main"><strong>{{ task.title }}</strong><span>Responsável: {{ task.assignee?.name || 'Sem responsável' }}</span></span>
+                <span class="tf-badge">{{ statusLabel(task.status) }}</span>
+                <span class="task-date">{{ task.dueDate ? (task.dueDate | date:'dd/MM/yyyy HH:mm') : 'Sem prazo' }}</span>
+              </button></li>
+            }
+          </ul>
+        }
+        <nav class="pagination" aria-label="Paginação de tarefas">
+          <button type="button" class="tf-button tf-button--subtle" [disabled]="result.meta.page <= 1" (click)="page(result.meta.page - 1)">Anterior</button>
+          <span>Página {{ result.meta.page }}@if (result.meta.totalPages) { de {{ result.meta.totalPages }} }</span>
+          <button type="button" class="tf-button tf-button--subtle" [disabled]="result.meta.page >= result.meta.totalPages" (click)="page(result.meta.page + 1)">Próxima</button>
+        </nav>
+      }
+    }
+  } @else if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+    <p role="status">Carregando organizações…</p>
+  } @else if (organizations.status() === 'error') {
+    <p class="message" role="alert">Não foi possível carregar suas organizações.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+  } @else {
+    <p class="description">Selecione ou crie uma organização para gerenciar suas tarefas.</p>
+    <a class="tf-button tf-button--subtle" routerLink="/">Escolher organização</a>
+  }
+</section>

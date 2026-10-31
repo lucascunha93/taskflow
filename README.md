@@ -13,8 +13,8 @@ não está configurada.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
   com validação de associação, controle de versão, filtros e paginação.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
-- Frontend Angular standalone com layout responsivo, autenticação, organizações
-  e listagem e inclusão de membros; tarefas ainda não estão integradas.
+- Frontend Angular standalone com autenticação, organizações, membros e gestão
+  de tarefas com filtros, paginação e concorrência otimista.
 
 As atualizações e exclusões usam concorrência otimista por `version`. O funcionamento
 offline e a sincronização mobile são planos futuros, não funcionalidades

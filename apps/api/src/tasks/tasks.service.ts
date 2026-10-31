@@ -141,6 +141,7 @@ export class TasksService {
     const task = await this.prisma.task.create({
       data: {
         title: dto.title.trim(),
+        ...(dto.status === undefined ? {} : { status: dto.status }),
         description: dto.description?.trim() || null,
         organizationId,
         creatorId: userId,

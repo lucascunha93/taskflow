@@ -1,7 +1,7 @@
 # TaskFlow Web
 
-Aplicação Angular standalone com layout responsivo, autenticação, organizações
-e gerenciamento inicial de membros. Tarefas ainda não estão integradas. `core`, `shared` e
+Aplicação Angular standalone com layout responsivo, autenticação, organizações,
+membros e tarefas. `core`, `shared` e
 os diretórios de `features` organizam a evolução por domínio.
 
 ## Layout e estilos
@@ -9,8 +9,9 @@ os diretórios de `features` organizam a evolução por domínio.
 O layout em `src/app/core/layout` separa cabeçalho, sidebar e navegação. Em
 celulares, o menu expande a navegação no fluxo da página e pode ser fechado
 com Escape. O perfil exibe os dados recebidos de `/auth/me` e permite sair.
-O seletor permite escolher organizações reais e a navegação de membros está
-disponível; busca e demais itens de negócio permanecem desabilitados.
+O seletor permite escolher organizações reais; membros e todas as tarefas estão
+disponíveis na navegação. A busca do cabeçalho, o dashboard e os demais itens
+ainda não estão conectados.
 
 Tokens e estilos reutilizáveis ficam em `src/styles/`: cores e dimensões usam
 propriedades CSS, enquanto os breakpoints são variáveis SCSS. Os ícones são
@@ -71,6 +72,28 @@ convites. Erros 403 e 409 são informados, assim como 404, que a API usa tanto
 para usuário inexistente quanto para organização inacessível. As permissões
 visuais são apenas orientação: o backend verifica cada operação. Uma requisição
 cancelada no navegador ainda pode ter sido processada pelo servidor.
+
+## Tarefas
+
+Em `/tasks`, a organização ativa determina todas as operações. A página consulta
+o resultado paginado da API, permite buscar por título, filtrar por status,
+responsável, criador e período de vencimento e escolher ordenação e tamanho da
+página. A pesquisa e os filtros aguardam 300 ms antes da consulta e reiniciam a
+paginação. Os filtros ficam no estado da página, não na URL; são reiniciados ao
+trocar de organização. As opções de pessoas usam os membros e as pessoas das
+tarefas carregadas. Para filtros por data, o backend interpreta dias em UTC.
+
+Criação e edição permitem título, descrição, status, responsável e prazo. A
+criação envia o status diretamente; o criador é identificado pelo JWT. Na
+edição, campos não alterados são omitidos, e limpar descrição, responsável ou
+prazo envia `null`. O formulário interpreta o vencimento no horário local e
+envia um instante ISO. O prazo original não é modificado se o campo não mudar.
+
+Atualização e exclusão enviam a versão obtida da API. Uma resposta 409 bloqueia
+a nova tentativa até o usuário recarregar a tarefa; não há repetição automática.
+A troca de organização ou a saída da página cancela requisições e oculta dados
+anteriores, mas uma operação cancelada pode já ter sido processada no servidor.
+O backend continua responsável por validar associação, responsável e versão.
 
 ## Requisitos e comandos
 

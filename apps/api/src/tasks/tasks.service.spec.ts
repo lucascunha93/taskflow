@@ -67,6 +67,15 @@ describe('TasksService', () => {
     }));
   });
 
+  it('creates a task with the requested valid status', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.create.mockResolvedValue({ id: 'task' });
+    await service.create(organizationId, userId, { title: 'Task', status: TaskStatus.DONE });
+    expect(prisma.task.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: TaskStatus.DONE }),
+    }));
+  });
+
   it('rejects task reads by users outside the organization without querying tasks', async () => {
     prisma.membership.findUnique.mockResolvedValue(null);
     await expect(service.findAll(organizationId, userId, new ListTasksQueryDto())).rejects.toMatchObject({ status: 404 });

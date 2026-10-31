@@ -1,0 +1,41 @@
+<section aria-labelledby="detail-title">
+  <button type="button" class="back" (click)="closed.emit()" [disabled]="busy()">← Voltar às tarefas</button>
+  @if (loading()) {
+    <h2 id="detail-title">Detalhes da tarefa</h2>
+    <p role="status">Carregando tarefa…</p>
+  } @else {
+    @if (error()) {
+      <p class="message" role="alert">{{ error() }}</p>
+      <button type="button" class="tf-button tf-button--subtle" (click)="refresh()" [disabled]="busy()">Recarregar tarefa</button>
+    }
+    @if (task(); as current) {
+      <h2 id="detail-title">{{ current.title }}</h2>
+      @if (editing()) {
+        <app-task-form [task]="current" [busy]="busy()" [locked]="conflict()" (submitted)="save($event)" (cancelled)="editing.set(false)" />
+      } @else {
+        <dl>
+          <div><dt>Status</dt><dd><span class="tf-badge">{{ statusLabel(current.status) }}</span></dd></div>
+          <div><dt>Descrição</dt><dd class="description">{{ current.description || 'Sem descrição' }}</dd></div>
+          <div><dt>Criador</dt><dd>{{ current.creator.name }}</dd></div>
+          <div><dt>Responsável</dt><dd>{{ current.assignee?.name || 'Sem responsável' }}</dd></div>
+          <div><dt>Vencimento</dt><dd>{{ current.dueDate ? (current.dueDate | date:'dd/MM/yyyy HH:mm') : 'Sem prazo' }}</dd></div>
+          <div><dt>Criada em</dt><dd>{{ current.createdAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>
+          <div><dt>Atualizada em</dt><dd>{{ current.updatedAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>
+        </dl>
+        <div class="actions">
+          <button type="button" class="tf-button" [disabled]="busy() || conflict()" (click)="editing.set(true)">Editar tarefa</button>
+          <button type="button" class="tf-button tf-button--subtle" [disabled]="busy() || conflict()" (click)="confirming.set(true)">Excluir tarefa</button>
+        </div>
+        @if (confirming()) {
+          <div class="confirmation">
+            <p>Excluir esta tarefa? Esta ação não pode ser desfeita.</p>
+            <div class="actions">
+              <button type="button" class="tf-button" [disabled]="busy() || conflict()" (click)="remove()">{{ busy() ? 'Excluindo…' : 'Confirmar exclusão' }}</button>
+              <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirming.set(false)">Cancelar</button>
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+</section>

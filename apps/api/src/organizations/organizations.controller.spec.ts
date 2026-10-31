@@ -133,4 +133,21 @@ describe('Authenticated HTTP endpoints', () => {
       .send({ title: 'Valid task', assigneeId: '33333333-3333-4333-8333-333333333333' }).expect(403);
     expect(prisma.task.create).not.toHaveBeenCalled();
   });
+
+  it('accepts a valid initial task status and rejects invalid or null values', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.create.mockResolvedValue({ id: 'task' });
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/tasks`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Valid task', status: 'IN_PROGRESS' }).expect(201);
+    expect(prisma.task.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'IN_PROGRESS' }),
+    }));
+    for (const status of ['OTHER', null]) {
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Valid task', status }).expect(400);
+    }
+    expect(prisma.task.create).toHaveBeenCalledTimes(1);
+  });
 });

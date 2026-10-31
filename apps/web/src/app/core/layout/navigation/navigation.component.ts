@@ -19,6 +19,5 @@ export class NavigationComponent {
   protected readonly workspaceItems: readonly NavigationItem[] = [
     { label: 'Dashboard', icon: 'dashboard' },
     { label: 'Minhas tarefas', icon: 'my-tasks' },
-    { label: 'Todas as tarefas', icon: 'tasks' },
   ];
 }

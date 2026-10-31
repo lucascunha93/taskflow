@@ -1,0 +1,12 @@
+form, fieldset { display: grid; gap: var(--space-4); }
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.field { display: grid; gap: var(--space-2); min-width: 0; }
+label { font-weight: 600; }
+label span, .hint { color: var(--color-text-secondary); font-weight: 400; }
+textarea.tf-field { padding: var(--space-3); resize: vertical; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--space-4); }
+.hint, .field-error { margin: 0; font-size: var(--font-size-small); }
+.field-error { color: #a92c36; }
+.tf-field[aria-invalid='true'] { border-color: #b83b45; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.field button { justify-self: start; }

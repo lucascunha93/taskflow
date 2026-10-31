@@ -1,0 +1,202 @@
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { debounceTime } from 'rxjs';
+import { MembersService } from '../members/members.service';
+import { OrganizationsService } from '../organizations/organizations.service';
+import { CreateTask, TASK_STATUSES, TaskPage, TaskQuery, TaskSort, TaskStatus, UpdateTask, statusLabel } from './task.models';
+import { TaskDetailComponent } from './task-detail.component';
+import { TaskFormComponent } from './task-form.component';
+import { TasksService } from './tasks.service';
+
+const initialQuery = (): TaskQuery => ({
+  page: 1, limit: 20, status: '', assigneeId: '', creatorId: '', search: '',
+  dueDateFrom: '', dueDateTo: '', sortBy: 'updatedAt', sortOrder: 'desc',
+});
+
+@Component({
+  selector: 'app-tasks-page',
+  imports: [DatePipe, ReactiveFormsModule, RouterLink, TaskDetailComponent, TaskFormComponent],
+  providers: [TasksService, MembersService],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './tasks-page.component.html',
+  styleUrl: './tasks-page.component.scss',
+})
+export class TasksPageComponent {
+  protected readonly organizations = inject(OrganizationsService);
+  protected readonly members = inject(MembersService);
+  private readonly api = inject(TasksService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly fb = inject(FormBuilder).nonNullable;
+  private readonly activeId = computed(() => this.organizations.active()?.id ?? null);
+  private readonly contextId = signal<string | null>(null);
+  private readonly query = signal<TaskQuery>(initialQuery());
+  private readonly reload = signal(0);
+  private readonly pageState = signal<TaskPage | null>(null);
+  private readonly loadingState = signal(false);
+  private readonly errorState = signal('');
+  protected readonly contextMatches = computed(() => this.activeId() === this.contextId());
+  protected readonly visiblePage = computed(() => this.activeId() === this.contextId() ? this.pageState() : null);
+  protected readonly filterPeople = computed(() => {
+    const people = new Map<string, string>();
+    for (const member of this.members.members()) people.set(member.user.id, member.user.name);
+    for (const task of this.visiblePage()?.data ?? []) {
+      people.set(task.creator.id, task.creator.name);
+      if (task.assignee) people.set(task.assignee.id, task.assignee.name);
+    }
+    const query = this.query();
+    for (const id of [query.creatorId, query.assigneeId]) {
+      if (id && !people.has(id)) people.set(id, 'Pessoa selecionada');
+    }
+    return Array.from(people, ([id, name]) => ({ id, name }));
+  });
+  protected readonly loading = computed(() => this.activeId() !== this.contextId() || this.loadingState());
+  protected readonly error = computed(() => this.activeId() === this.contextId() ? this.errorState() : '');
+  protected readonly filterError = signal('');
+  protected readonly creating = signal(false);
+  protected readonly createBusy = signal(false);
+  protected readonly createUncertain = signal(false);
+  protected readonly createError = signal('');
+  protected readonly selected = signal<{ id: string; organizationId: string } | null>(null);
+  protected readonly notice = signal('');
+  protected readonly statuses = TASK_STATUSES;
+  protected readonly statusLabel = statusLabel;
+  protected readonly filters = this.fb.group({
+    search: [''],
+    status: this.fb.control<TaskStatus | ''>(''),
+    assigneeId: [''],
+    creatorId: [''],
+    dueDateFrom: [''],
+    dueDateTo: [''],
+    sortBy: this.fb.control<TaskSort>('updatedAt'),
+    sortOrder: this.fb.control<'asc' | 'desc'>('desc'),
+    limit: this.fb.control(20),
+  });
+
+  constructor() {
+    this.filters.valueChanges.pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      const filters = this.filters.getRawValue();
+      if (filters.dueDateFrom && filters.dueDateTo && filters.dueDateFrom > filters.dueDateTo) {
+        this.filterError.set('A data inicial não pode ser posterior à data final. Os filtros ainda não foram aplicados.');
+        return;
+      }
+      this.filterError.set('');
+      this.query.set({ ...filters, search: filters.search.trim(), page: 1, limit: Number(filters.limit) });
+    });
+
+    effect(() => {
+      this.activeId();
+      this.filters.reset({
+        search: '', status: '', assigneeId: '', creatorId: '', dueDateFrom: '', dueDateTo: '',
+        sortBy: 'updatedAt', sortOrder: 'desc', limit: 20,
+      }, { emitEvent: false });
+      this.query.set(initialQuery());
+      this.filterError.set('');
+      this.creating.set(false);
+      this.createBusy.set(false);
+      this.createUncertain.set(false);
+      this.createError.set('');
+      this.selected.set(null);
+      this.notice.set('');
+    });
+
+    effect((onCleanup) => {
+      const organizationId = this.activeId();
+      const query = this.query();
+      this.reload();
+      this.contextId.set(organizationId);
+      this.pageState.set(null);
+      this.errorState.set('');
+      if (!organizationId) {
+        this.loadingState.set(false);
+        return;
+      }
+      this.loadingState.set(true);
+      const request = this.api.list(query).subscribe({
+        next: (page) => {
+          if (this.activeId() !== organizationId) return;
+          if (page.meta.page > Math.max(1, page.meta.totalPages)) {
+            this.query.update((current) => ({ ...current, page: Math.max(1, page.meta.totalPages) }));
+            return;
+          }
+          this.pageState.set(page);
+          this.loadingState.set(false);
+        },
+        error: (error: unknown) => {
+          if (this.activeId() !== organizationId) return;
+          this.errorState.set(error instanceof HttpErrorResponse && error.status === 403
+            ? 'Você não tem permissão para consultar as tarefas.'
+            : error instanceof HttpErrorResponse && error.status === 404
+              ? 'Organização não encontrada ou acesso indisponível.'
+              : 'Não foi possível carregar as tarefas. Verifique a conexão e tente novamente.');
+          this.loadingState.set(false);
+        },
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+  }
+
+  protected page(number: number): void {
+    this.query.update((query) => ({ ...query, page: number }));
+  }
+
+  protected refresh(): void {
+    this.reload.update((value) => value + 1);
+  }
+
+  protected open(taskId: string): void {
+    const organizationId = this.activeId();
+    if (!organizationId) return;
+    this.notice.set('');
+    this.selected.set({ id: taskId, organizationId });
+  }
+
+  protected create(data: CreateTask | UpdateTask): void {
+    const organizationId = this.activeId();
+    if (!organizationId || this.createBusy() || this.createUncertain() || 'version' in data) return;
+    this.createError.set('');
+    this.createBusy.set(true);
+    this.api.create(data).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        if (this.activeId() !== organizationId) return;
+        this.createBusy.set(false);
+        this.creating.set(false);
+        this.notice.set('Tarefa criada.');
+        this.refresh();
+      },
+      error: (error: unknown) => {
+        if (this.activeId() !== organizationId) return;
+        this.createBusy.set(false);
+        if (error instanceof HttpErrorResponse && error.status === 403) {
+          this.createError.set('Operação não permitida. Confira o responsável e suas permissões.');
+        } else if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.createError.set('Organização não encontrada ou acesso indisponível.');
+        } else if (error instanceof HttpErrorResponse && error.status === 400) {
+          this.createError.set('Dados inválidos. Confira os campos e tente novamente.');
+        } else {
+          this.createUncertain.set(true);
+          this.createError.set('Não foi possível confirmar a criação. Volte e atualize a lista antes de tentar novamente.');
+        }
+      },
+    });
+  }
+
+  protected cancelCreate(): void {
+    this.creating.set(false);
+    this.createError.set('');
+    if (this.createUncertain()) {
+      this.notice.set('Criação não confirmada. Confira a lista antes de tentar novamente.');
+      this.createUncertain.set(false);
+      this.refresh();
+    }
+  }
+
+  protected changed(message: string): void {
+    this.selected.set(null);
+    this.notice.set(message);
+    this.refresh();
+  }
+}
