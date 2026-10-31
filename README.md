@@ -2,7 +2,8 @@
 
 TaskFlow é uma plataforma SaaS B2B de gestão de tarefas para organizações. O
 repositório usa npm workspaces e está em desenvolvimento inicial: a API NestJS
-existe; as aplicações web e mobile ainda não estão configuradas.
+e a fundação do frontend Angular estão configuradas; a aplicação mobile ainda
+não está configurada.
 
 ## Estado atual
 
@@ -12,6 +13,8 @@ existe; as aplicações web e mobile ainda não estão configuradas.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
   com validação de associação, controle de versão, filtros e paginação.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
+- Fundação Angular standalone com roteador, HttpClient e configuração por
+  ambiente; ainda não há telas ou fluxos de negócio.
 
 As atualizações e exclusões usam concorrência otimista por `version`. O funcionamento
 offline e a sincronização mobile são planos futuros, não funcionalidades
@@ -43,6 +46,8 @@ existentes:
    depois de avaliar o estado do banco existente,
    `npm run db:migrate:deploy --workspace api`.
 6. Inicie com `npm run start:dev --workspace api`. O padrão é a porta 3000.
+7. Para o frontend, execute `npm run start --workspace web` e acesse
+   `http://localhost:4200`.
 
 Não execute migrações em um banco existente sem verificar o impacto. A
 segunda migration adiciona `passwordHash` obrigatório e falha se houver
@@ -56,6 +61,9 @@ npm run build --workspace api
 npm run lint --workspace api
 npm run test --workspace api
 npm run test:e2e --workspace api
+npm run build --workspace web
+npm run lint --workspace web
+npm run test --workspace web
 ```
 
 Os testes de serviço e HTTP usam dependências simuladas; os testes de
@@ -63,5 +71,6 @@ montagem também substituem o banco e a observabilidade. Eles não comprovam
 integração real com PostgreSQL. Antes de produção, são necessários testes de
 integração em banco dedicado, incluindo isolamento entre organizações.
 
-Consulte [apps/api/README.md](apps/api/README.md) para detalhes dos scripts,
-variáveis, endpoints e limitações. Nunca versione arquivos `.env` ou segredos.
+Consulte [apps/api/README.md](apps/api/README.md) e
+[apps/web/README.md](apps/web/README.md) para detalhes de configuração e
+limitações. Nunca versione arquivos `.env` ou segredos.
