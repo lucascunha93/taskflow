@@ -1,0 +1,22 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const proxy = require('../proxy.conf.json');
+
+const patterns = Object.keys(proxy).filter((key) => key.startsWith('^')).map((key) => new RegExp(key));
+const proxied = (path) => patterns.some((pattern) => pattern.test(path));
+
+test('proxies organization API routes but not the Angular creation page', () => {
+  for (const path of [
+    '/organizations',
+    '/organizations?limit=1',
+    '/organizations/invalid-id/members',
+    '/organizations/invalid-id/tasks',
+    '/organizations/invalid-id/tasks?page=1',
+    '/organizations/invalid-id/tasks/summary',
+    '/organizations/invalid-id/tasks/task-id?version=1',
+  ]) assert.equal(proxied(path), true, path);
+
+  for (const path of ['/organizations/new', '/organizations/new?source=home', '/organizations/new/']) {
+    assert.equal(proxied(path), false, path);
+  }
+});

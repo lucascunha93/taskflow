@@ -123,6 +123,7 @@ npm run start --workspace web
 npm run build --workspace web
 npm run lint --workspace web
 npm run test --workspace web
+npm run test:proxy --workspace web
 npm run test:watch --workspace web
 ```
 
@@ -137,8 +138,9 @@ A aplicação disponibiliza a URL pelo token `API_BASE_URL` em
 `src/app/core/api-base-url.ts`. Ajuste `apiBaseUrl` em:
 
 - `src/environments/environment.development.ts`: desenvolvimento, por padrão
-  a mesma origem. O proxy da CLI encaminha `/auth` e `/organizations` para
-  `http://localhost:3000`; inicie a API separadamente.
+  a mesma origem. O proxy da CLI encaminha `/auth`, `/organizations` e os
+  endpoints de membros e tarefas para `http://localhost:3000`, preservando
+  a rota Angular `/organizations/new`; inicie a API separadamente.
 - `src/environments/environment.ts`: produção, por padrão vazio, representando
   a mesma origem da aplicação. O servidor de produção deve encaminhar as rotas
   da API para o backend, ou a URL deve ser configurada antes do build.
@@ -147,6 +149,6 @@ O Angular substitui o arquivo de produção pelo de desenvolvimento no build
 `development`. Valores são incorporados ao bundle público: nunca coloque
 segredos ou credenciais nesses arquivos. A API atual não configura CORS: uma
 URL de API em outra origem exige política CORS apropriada no backend. Em
-produção, configure o servidor para encaminhar `/auth` e `/organizations` à API e servir o
-frontend nas rotas da aplicação. Os testes usam HTTP simulado e não substituem
+produção, encaminhe os endpoints da API sem interceptar a rota do frontend
+`/organizations/new`, e sirva o frontend nas rotas da aplicação. Os testes usam HTTP simulado e não substituem
 testes de integração com a API e banco reais.

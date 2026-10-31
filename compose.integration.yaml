@@ -1,0 +1,16 @@
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: taskflow_integration_test
+      POSTGRES_USER: taskflow_test
+      POSTGRES_PASSWORD: ${TASKFLOW_TEST_PASSWORD:?Defina uma senha exclusiva para testes}
+    ports:
+      - "127.0.0.1:${TASKFLOW_TEST_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow_test -d taskflow_integration_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

@@ -57,8 +57,66 @@ npm run test:e2e --workspace api
 Os testes unitários verificam regras dos serviços e fazem requisições HTTP com
 Prisma simulado. O teste de montagem do `AppModule` também substitui Prisma e
 Observe: ele não valida conexão real, migrations ou isolamento no PostgreSQL.
-Esses cenários precisam de testes de integração contra um banco de teste
-dedicado, sem reutilizar dados de desenvolvimento ou produção.
+
+## Integração com PostgreSQL real
+
+A suíte `test:integration` usa os módulos reais de autenticação, organizações,
+tarefas e Prisma por HTTP, sem iniciar o Observe. Ela cobre isolamento,
+concorrência, transações e integridade referencial. Exige banco dedicado:
+**não use um banco de desenvolvimento, produção ou de outra pessoa**. O
+arquivo `compose.integration.yaml` é independente do Compose de desenvolvimento,
+usa PostgreSQL 17 e armazenamento temporário em memória, sem volume persistente.
+Ao parar o contêiner, os dados desse banco de teste são perdidos.
+
+Exemplo em PowerShell, na raiz, com Docker e daemon disponíveis:
+
+```powershell
+$project = "taskflow-it-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+$env:TASKFLOW_TEST_PORT = "55432" # escolha outra porta livre se necessário
+$env:TASKFLOW_TEST_PASSWORD = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+docker compose -p $project -f .\compose.integration.yaml up -d --wait
+```
+
+Confirme que o contêiner criado por esse comando está saudável antes de
+continuar. Em seguida, no mesmo terminal, configure explicitamente a URL
+do banco recém-criado; os valores hexadecimais da senha não precisam de
+codificação adicional na URL:
+
+```powershell
+$previousDatabaseUrl = $env:DATABASE_URL
+$env:TASKFLOW_INTEGRATION_URL = "postgresql://taskflow_test:$($env:TASKFLOW_TEST_PASSWORD)@127.0.0.1:$($env:TASKFLOW_TEST_PORT)/taskflow_integration_test"
+$env:DATABASE_URL = $env:TASKFLOW_INTEGRATION_URL
+$env:TASKFLOW_INTEGRATION_CONFIRM = "isolated-test-database"
+npm run db:generate --workspace api
+npm run db:migrate:deploy --workspace api
+npm run test:integration --workspace api
+```
+
+Pare imediatamente se a criação do contêiner, geração ou migration falhar.
+O comando de migration altera o banco indicado por `DATABASE_URL`; confirme a
+porta e a finalidade antes de executá-lo. A suíte exige confirmação explícita,
+host `127.0.0.1`, usuário `taskflow_test`, banco `taskflow_integration_test`
+e porta diferente de 5432. Essas verificações são barreiras contra enganos,
+não comprovam por si só que o banco é descartável. Ela cria identificadores
+únicos e remove somente os registros identificados que criou; uma interrupção
+abrupta pode deixar dados de teste.
+
+Ao terminar, pare **somente o projeto Compose gerado acima** e restaure a
+variável anterior, sem editar `.env`:
+
+```powershell
+docker compose -p $project -f .\compose.integration.yaml down
+if ($null -eq $previousDatabaseUrl) { Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue }
+else { $env:DATABASE_URL = $previousDatabaseUrl }
+Remove-Item Env:TASKFLOW_INTEGRATION_URL, Env:TASKFLOW_INTEGRATION_CONFIRM, Env:TASKFLOW_TEST_PASSWORD, Env:TASKFLOW_TEST_PORT -ErrorAction SilentlyContinue
+```
+
+Para executar toda a validação, rode também os comandos de API e frontend da
+seção de verificação do README principal. Sem Docker, pode-se usar outro
+PostgreSQL recém-criado e comprovadamente isolado com o mesmo usuário e nome
+de banco; nunca aponte os comandos acima para uma instância existente.
+Os testes HTTP de integração não substituem uma validação de infraestrutura
+de produção.
 
 ## Endpoints existentes
 

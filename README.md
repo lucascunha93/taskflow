@@ -61,15 +61,20 @@ npm run build --workspace api
 npm run lint --workspace api
 npm run test --workspace api
 npm run test:e2e --workspace api
+npm run build --workspace web -- --configuration development
 npm run build --workspace web
 npm run lint --workspace web
 npm run test --workspace web
+npm run test:proxy --workspace web
+node .\node_modules\typescript\bin\tsc --noEmit --incremental false --project apps\api\tsconfig.json
+node .\node_modules\typescript\bin\tsc --noEmit --project apps\web\tsconfig.app.json
+node .\node_modules\typescript\bin\tsc --noEmit --project apps\web\tsconfig.spec.json
 ```
 
-Os testes de serviço e HTTP usam dependências simuladas; os testes de
-montagem também substituem o banco e a observabilidade. Eles não comprovam
-integração real com PostgreSQL. Antes de produção, são necessários testes de
-integração em banco dedicado, incluindo isolamento entre organizações.
+Os testes de serviço e HTTP existentes usam dependências simuladas; a suíte
+separada `test:integration` usa PostgreSQL real e deve ser executada somente
+em um banco exclusivo para testes. Consulte as instruções de isolamento,
+migrations e execução no [README da API](apps/api/README.md).
 
 Consulte [apps/api/README.md](apps/api/README.md) e
 [apps/web/README.md](apps/web/README.md) para detalhes de configuração e
