@@ -37,11 +37,11 @@ describe('MainLayoutComponent', () => {
     expect(element.querySelector<HTMLAnchorElement>('.skip-link')?.getAttribute('href')).toBe('#main-content');
     const navButtons = element.querySelectorAll<HTMLButtonElement>('nav button');
     expect(Array.from(navButtons, (button) => button.textContent?.trim())).toEqual([
-      'Dashboard', 'Minhas tarefas', 'Configurações',
+      'Minhas tarefas', 'Configurações',
     ]);
     expect(Array.from(navButtons).every((button) => button.disabled)).toBe(true);
     expect(Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a'), (link) => link.getAttribute('href')))
-      .toEqual(['/tasks', '/members']);
+      .toEqual(['/', '/tasks', '/members']);
     expect(element.querySelector<HTMLInputElement>('input[type="search"]')?.disabled).toBe(true);
   });
 

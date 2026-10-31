@@ -10,8 +10,8 @@ O layout em `src/app/core/layout` separa cabeçalho, sidebar e navegação. Em
 celulares, o menu expande a navegação no fluxo da página e pode ser fechado
 com Escape. O perfil exibe os dados recebidos de `/auth/me` e permite sair.
 O seletor permite escolher organizações reais; membros e todas as tarefas estão
-disponíveis na navegação. A busca do cabeçalho, o dashboard e os demais itens
-ainda não estão conectados.
+disponíveis na navegação. A busca do cabeçalho e os demais itens ainda não
+estão conectados.
 
 Tokens e estilos reutilizáveis ficam em `src/styles/`: cores e dimensões usam
 propriedades CSS, enquanto os breakpoints são variáveis SCSS. Os ícones são
@@ -56,6 +56,24 @@ o contexto e tentam remover a seleção; falhas de armazenamento são informadas
 O ID armazenado é apenas contexto de navegação, não prova de autorização:
 o backend continua responsável por verificar a associação em cada operação.
 Páginas dependentes de organização precisam tratar a ausência de contexto.
+
+## Dashboard
+
+Em `/`, a organização ativa apresenta indicadores de todas as suas tarefas e
+distribuição por status, obtidos de `GET /organizations/:organizationId/tasks/summary`.
+As listas mostram até cinco tarefas atribuídas ao usuário, próximas do
+vencimento e recentemente atualizadas. Somente tarefas em aberto com prazo entre
+o instante de referência da API e sete períodos de 24 horas depois aparecem
+como próximas do vencimento; as atrasadas ficam de fora dessa lista. Na seção
+pessoal, tarefas em aberto atrasadas ou próximas recebem destaque visual.
+As datas são exibidas no horário local.
+
+As tarefas abrem detalhes e permitem edição ou exclusão com as mesmas regras
+da página de tarefas; após uma alteração, o dashboard é atualizado. O botão
+Atualizar também consulta novamente a API. A lista de atualizações recentes
+não é um histórico de atividades. Ao trocar de organização, dados anteriores
+são ocultados e requisições pendentes canceladas ou ignoradas; a autorização
+continua sendo responsabilidade do backend.
 
 ## Membros
 

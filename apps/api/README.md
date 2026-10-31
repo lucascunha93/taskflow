@@ -71,6 +71,7 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 | POST, GET | `/organizations` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
+| GET | `/organizations/:organizationId/tasks/summary` | JWT |
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
 
 A criação de tarefas valida a associação do solicitante e do responsável.
@@ -82,6 +83,23 @@ As consultas exigem associação à organização e retornam os campos da tarefa
 mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
 O detalhe retorna 404 para tarefa inexistente na organização, inclusive quando
 pertence a outro tenant. Organizações inacessíveis também retornam 404.
+
+### Resumo para o dashboard
+
+`GET /organizations/:organizationId/tasks/summary` exige JWT e associação à
+organização. Retorna `total` e `counts` com as contagens completas por status
+(`TODO`, `IN_PROGRESS`, `DONE`, `CANCELLED`), além de `asOf` e `dueUntil`
+como instantes ISO. Os resultados são obtidos em um snapshot de leitura.
+
+As listas `myTasks`, `dueSoon` e `recentlyUpdated` contêm até cinco tarefas,
+com `id`, `organizationId`, `title`, `status`, `dueDate` e `updatedAt`.
+`myTasks` contém tarefas atribuídas ao usuário do JWT, de qualquer status,
+ordenadas por prazo crescente (nulos por último) e ID. `dueSoon` contém tarefas
+`TODO` ou `IN_PROGRESS` com prazo entre `asOf` e `dueUntil`, inclusive;
+`dueUntil` corresponde a sete períodos de 24 horas após `asOf`. Tarefas
+atrasadas não são incluídas. A ordenação é por prazo e ID crescentes.
+`recentlyUpdated` usa atualização e ID decrescentes; não representa histórico
+de atividades.
 
 ### Listagem de tarefas
 

@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { OrganizationsService } from './organizations.service';
+import { DashboardComponent } from '../dashboard/dashboard.component';
 
 @Component({
   selector: 'app-organization-home',
-  imports: [RouterLink],
+  imports: [RouterLink, DashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './organization-home.component.html',
   styleUrl: './organization-page.scss',

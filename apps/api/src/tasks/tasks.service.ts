@@ -30,6 +30,15 @@ const taskDetailsSelect = {
   assignee: { select: { id: true, name: true } },
 } satisfies Prisma.TaskSelect;
 
+const summaryTaskSelect = {
+  id: true,
+  organizationId: true,
+  title: true,
+  status: true,
+  dueDate: true,
+  updatedAt: true,
+} satisfies Prisma.TaskSelect;
+
 type TaskDetails = Prisma.TaskGetPayload<{ select: typeof taskDetailsSelect }>;
 type PaginatedTasks = {
   data: TaskDetails[];
@@ -39,6 +48,49 @@ type PaginatedTasks = {
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async summary(organizationId: string, userId: string) {
+    await this.assertMembership(organizationId, userId);
+    const asOf = new Date();
+    const dueUntil = new Date(asOf.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const where: Prisma.TaskWhereInput = {
+      organizationId,
+      organization: { memberships: { some: { userId } } },
+    };
+    const [groups, myTasks, dueSoon, recentlyUpdated] = await this.prisma.$transaction([
+      this.prisma.task.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      this.prisma.task.findMany({
+        where: { ...where, assigneeId: userId },
+        select: summaryTaskSelect,
+        orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+        take: 5,
+      }),
+      this.prisma.task.findMany({
+        where: { ...where, status: { in: ['TODO', 'IN_PROGRESS'] }, dueDate: { gte: asOf, lte: dueUntil } },
+        select: summaryTaskSelect,
+        orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+        take: 5,
+      }),
+      this.prisma.task.findMany({
+        where,
+        select: summaryTaskSelect,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 5,
+      }),
+    ], { isolationLevel: 'RepeatableRead' });
+
+    const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0, CANCELLED: 0 };
+    for (const group of groups) counts[group.status] = group._count._all;
+    return {
+      total: Object.values(counts).reduce((sum, count) => sum + count, 0),
+      counts,
+      asOf,
+      dueUntil,
+      myTasks,
+      dueSoon,
+      recentlyUpdated,
+    };
+  }
 
   async findAll(
     organizationId: string,

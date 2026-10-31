@@ -1,0 +1,29 @@
+<section class="task-section">
+  <div class="section-heading"><h2>{{ title() }}</h2><span>Até 5 tarefas</span></div>
+  @if (tasks().length === 0) {
+    <p class="empty">{{ emptyText() }}</p>
+  } @else {
+    <ul>
+      @for (task of tasks(); track task.id) {
+        <li>
+          <button type="button" class="task" (click)="opened.emit(task)">
+            <span class="task-content">
+              <strong>{{ task.title }}</strong>
+              <span>{{ statusLabel(task.status) }}</span>
+            </span>
+            <span class="task-meta">
+              @if (mode() === 'recent') {
+                <span>Atualizada {{ task.updatedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+              } @else {
+                <span>{{ task.dueDate ? (task.dueDate | date:'dd/MM/yyyy HH:mm') : 'Sem prazo' }}</span>
+                @if (mode() === 'mine' && deadlineLabel(task)) {
+                  <span class="deadline" [class.deadline--overdue]="deadlineLabel(task) === 'Atrasada'">{{ deadlineLabel(task) }}</span>
+                }
+              }
+            </span>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>

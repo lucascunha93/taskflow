@@ -17,7 +17,6 @@ interface NavigationItem {
 export class NavigationComponent {
   readonly navigated = output<void>();
   protected readonly workspaceItems: readonly NavigationItem[] = [
-    { label: 'Dashboard', icon: 'dashboard' },
     { label: 'Minhas tarefas', icon: 'my-tasks' },
   ];
 }

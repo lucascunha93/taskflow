@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -9,6 +9,10 @@ import { OrganizationsService } from './organizations.service';
 import { OrganizationHomeComponent } from './organization-home.component';
 import { OrganizationSelectorComponent } from './organization-selector.component';
 import { CreateOrganizationComponent } from './create-organization.component';
+import { DashboardComponent } from '../dashboard/dashboard.component';
+
+@Component({ selector: 'app-dashboard', template: '' })
+class DashboardStub {}
 
 const first: Organization = { id: 'one', name: 'Equipe A', slug: 'equipe-a', role: 'OWNER', createdAt: '2026-01-01' };
 const second: Organization = { id: 'two', name: 'Equipe B', slug: 'equipe-b', role: 'MEMBER', createdAt: '2026-01-01' };
@@ -44,6 +48,9 @@ describe('Organization components', () => {
         { provide: OrganizationsService, useValue: service },
       ],
     });
+    TestBed.overrideComponent(OrganizationHomeComponent, {
+      remove: { imports: [DashboardComponent] }, add: { imports: [DashboardStub] },
+    });
   });
 
   it('shows loading, failure, empty and choice states on the home page', async () => {
@@ -63,7 +70,8 @@ describe('Organization components', () => {
     expect(element.textContent).toContain('Escolha uma organização');
     element.querySelector<HTMLButtonElement>('.organization-choice')?.click();
     await fixture.whenStable();
-    expect(element.querySelector('h1')?.textContent).toBe(first.name);
+    expect(element.querySelector('h1')?.textContent).toBe('Dashboard');
+    expect(element.textContent).toContain(first.name);
   });
 
   it('opens the selector, switches organization and closes after selection', async () => {

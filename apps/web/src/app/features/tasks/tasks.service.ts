@@ -3,6 +3,7 @@ import { DestroyRef, Injectable, computed, effect, inject } from '@angular/core'
 import { Observable, Subject, defer, map, takeUntil, throwError } from 'rxjs';
 import { API_BASE_URL } from '../../core/api-base-url';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { DashboardSummary } from '../dashboard/dashboard.models';
 import { CreateTask, Task, TaskPage, TaskQuery, TaskRecord, UpdateTask } from './task.models';
 
 @Injectable()
@@ -37,6 +38,28 @@ export class TasksService {
         !Number.isInteger(result.meta.totalPages) || result.meta.totalPages < 0 ||
         result.data.some((task) => !task || task.organizationId !== id)) {
         throw new Error('Resposta de tarefas inválida.');
+      }
+      return result;
+    });
+  }
+
+  summary(): Observable<DashboardSummary> {
+    return this.request((url) => this.http.get<DashboardSummary>(`${url}/summary`), (result, id) => {
+      const statuses = ['TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED'] as const;
+      const validTask = (task: DashboardSummary['myTasks'][number]): boolean =>
+        !!task && task.organizationId === id && typeof task.id === 'string' && !!task.id &&
+        typeof task.title === 'string' && !!task.title &&
+        statuses.includes(task.status) && typeof task.updatedAt === 'string' &&
+        !Number.isNaN(Date.parse(task.updatedAt)) &&
+        (task.dueDate === null || (typeof task.dueDate === 'string' && !Number.isNaN(Date.parse(task.dueDate))));
+      if (!result || !result.counts || !Number.isInteger(result.total) || result.total < 0 ||
+        statuses.some((status) => !Number.isInteger(result.counts[status]) || result.counts[status] < 0) ||
+        statuses.reduce((total, status) => total + result.counts[status], 0) !== result.total ||
+        Number.isNaN(Date.parse(result.asOf)) || Number.isNaN(Date.parse(result.dueUntil)) ||
+        Date.parse(result.asOf) > Date.parse(result.dueUntil) ||
+        [result.myTasks, result.dueSoon, result.recentlyUpdated].some((tasks) =>
+          !Array.isArray(tasks) || tasks.some((task) => !validTask(task)))) {
+        throw new Error('Resposta do dashboard inválida.');
       }
       return result;
     });

@@ -1,0 +1,50 @@
+@if (selected(); as task) {
+  @if (task.organizationId === organizations.active()?.id) {
+    <app-dashboard-task-detail [taskId]="task.id" (closed)="selected.set(null)" (changed)="changed($event)" />
+  }
+} @else if (status() === 'loading') {
+  <p role="status">Carregando indicadores…</p>
+} @else if (status() === 'error') {
+  <p class="message" role="alert">{{ error() }}</p>
+  <button type="button" class="tf-button tf-button--subtle" (click)="refresh()">Tentar novamente</button>
+} @else if (summary(); as data) {
+  @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+  <div class="summary-heading">
+    <div><h2>Visão geral</h2><p>Dados atualizados em {{ data.asOf | date:'dd/MM/yyyy HH:mm' }}</p></div>
+    <button type="button" class="tf-button tf-button--subtle" (click)="refresh()">Atualizar</button>
+  </div>
+  <div class="metrics" aria-label="Indicadores de tarefas">
+    <div class="metric"><span>Total de tarefas</span><strong>{{ data.total }}</strong></div>
+    @for (status of statuses; track status.value) {
+      <div class="metric"><span>{{ status.label }}</span><strong>{{ data.counts[status.value] }}</strong></div>
+    }
+  </div>
+  <section class="distribution" aria-labelledby="distribution-title">
+    <div class="section-heading"><h2 id="distribution-title">Distribuição por status</h2><span>Organização completa</span></div>
+    @if (data.total === 0) {
+      <p class="empty">Ainda não há tarefas nesta organização.</p>
+    } @else {
+      <ul>
+        @for (status of statuses; track status.value) {
+          <li>
+            <div class="distribution-label"><span>{{ status.label }}</span><span>{{ data.counts[status.value] }} / {{ data.total }}</span></div>
+            <div class="bar" aria-hidden="true"><span [style.width.%]="percent(status.value, data)"></span></div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+  <div class="lists">
+    <app-dashboard-task-list title="Minhas tarefas" emptyText="Nenhuma tarefa atribuída a você."
+      mode="mine" [summary]="data" [tasks]="data.myTasks" (opened)="open($event)" />
+    <app-dashboard-task-list title="Próximas do vencimento" emptyText="Nenhuma tarefa em aberto vence nos próximos 7 dias."
+      mode="due" [summary]="data" [tasks]="data.dueSoon" (opened)="open($event)" />
+  </div>
+  <p class="hint">Próximas do vencimento: tarefas em aberto entre agora e os próximos 7 dias; atrasadas não são incluídas.</p>
+  <div class="recent">
+    <app-dashboard-task-list title="Tarefas recentemente atualizadas" emptyText="Nenhuma tarefa foi encontrada."
+      mode="recent" [summary]="data" [tasks]="data.recentlyUpdated" (opened)="open($event)" />
+    <p class="hint">Esta lista mostra a última atualização de cada tarefa, não um histórico de atividades.</p>
+  </div>
+  <a class="text-link" routerLink="/tasks">Ver todas as tarefas</a>
+}

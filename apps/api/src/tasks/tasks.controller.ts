@@ -46,6 +46,14 @@ export class TasksController {
     return this.tasksService.findAll(organizationId, request.user.sub, query);
   }
 
+  @Get('summary')
+  summary(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.tasksService.summary(organizationId, request.user.sub);
+  }
+
   @Get(':taskId')
   findOne(
     @Param('organizationId', ParseUUIDPipe) organizationId: string,
