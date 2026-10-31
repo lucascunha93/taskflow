@@ -76,11 +76,55 @@ dedicado, sem reutilizar dados de desenvolvimento ou produção.
 A criação de tarefas valida a associação do solicitante e do responsável.
 As consultas exigem associação à organização e retornam os campos da tarefa
 mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
-A listagem retorna um array ordenado por `updatedAt` decrescente, com `id`
-decrescente como desempate. Ainda não há filtros ou paginação: a listagem
-retorna todas as tarefas da organização. O detalhe retorna 404 para tarefa
-inexistente na organização, inclusive quando pertence a outro tenant.
-Organizações inacessíveis também retornam 404.
+O detalhe retorna 404 para tarefa inexistente na organização, inclusive quando
+pertence a outro tenant. Organizações inacessíveis também retornam 404.
+
+### Listagem de tarefas
+
+`GET /organizations/:organizationId/tasks` retorna:
+
+```json
+{
+  "data": [],
+  "meta": { "page": 1, "limit": 20, "total": 0, "totalPages": 0 }
+}
+```
+
+Esse formato substitui o array retornado anteriormente. Uma página além da
+última tem `data` vazio e mantém o total e o número de páginas correspondentes
+ao filtro. Todos os parâmetros são opcionais:
+
+| Parâmetro | Descrição |
+| --- | --- |
+| `page` | Inteiro positivo; padrão `1`. |
+| `limit` | Inteiro entre 1 e 100; padrão `20`. |
+| `status` | `TODO`, `IN_PROGRESS`, `DONE` ou `CANCELLED`. |
+| `assigneeId`, `creatorId` | UUID do responsável ou criador. |
+| `search` | Trecho literal do título, sem diferenciar maiúsculas de minúsculas; não pode ser vazio. |
+| `dueDateFrom`, `dueDateTo` | Limites inclusivos de prazo em formato ISO. |
+| `sortBy` | `createdAt`, `updatedAt`, `dueDate` ou `title`; padrão `updatedAt`. |
+| `sortOrder` | `asc` ou `desc`; padrão `desc`. |
+
+Exemplo:
+
+```http
+GET /organizations/:organizationId/tasks?status=TODO&sortBy=dueDate&sortOrder=asc&page=1&limit=20
+```
+
+O desempate é por `id` no mesmo sentido de `sortOrder`. Em ordenação por prazo,
+os valores nulos seguem o PostgreSQL: por último em `asc` e primeiro em `desc`.
+Para limites de prazo, uma data `YYYY-MM-DD` representa o início ou o final
+desse dia em UTC, conforme seja `dueDateFrom` ou `dueDateTo`. Timestamps devem
+conter fuso explícito, por exemplo `2026-10-10T12:30:00Z` ou
+`2026-10-10T12:30:00-03:00`; são comparados como instantes. Quando há filtro de
+prazo, tarefas sem prazo não são incluídas. O limite inicial não pode ser
+posterior ao final. Parâmetros inválidos ou uma página cujo deslocamento exceda
+2.147.483.647 resultam em 400.
+
+A contagem e os dados usam os mesmos filtros e um snapshot de leitura
+consistente. Os índices atuais cobrem organização/status/atualização e
+organização/responsável; a ordenação padrão sem status e a pesquisa textual
+devem ser avaliadas com consultas reais antes de propor novos índices.
 
 O `PUT` aceita atualizações parciais de `title`, `description`, `status`,
 `assigneeId` e `dueDate`. A `version` atual é obrigatória: se estiver

@@ -1,5 +1,6 @@
 
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,7 +10,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
+import { taskDateBound } from './task-date-range.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -28,22 +31,63 @@ const taskDetailsSelect = {
 } satisfies Prisma.TaskSelect;
 
 type TaskDetails = Prisma.TaskGetPayload<{ select: typeof taskDetailsSelect }>;
+type PaginatedTasks = {
+  data: TaskDetails[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
 
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, userId: string): Promise<TaskDetails[]> {
+  async findAll(
+    organizationId: string,
+    userId: string,
+    query: ListTasksQueryDto,
+  ): Promise<PaginatedTasks> {
     await this.assertMembership(organizationId, userId);
 
-    return this.prisma.task.findMany({
-      where: {
-        organizationId,
-        organization: { memberships: { some: { userId } } },
+    const skip = (query.page - 1) * query.limit;
+    if (!Number.isSafeInteger(skip) || skip > 2147483647) {
+      throw new BadRequestException('A página solicitada excede o limite de paginação.');
+    }
+
+    const where: Prisma.TaskWhereInput = {
+      organizationId,
+      organization: { memberships: { some: { userId } } },
+      status: query.status,
+      assigneeId: query.assigneeId,
+      creatorId: query.creatorId,
+      title: query.search === undefined
+        ? undefined
+        : { contains: query.search.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' },
+      dueDate: query.dueDateFrom === undefined && query.dueDateTo === undefined
+        ? undefined
+        : {
+            gte: query.dueDateFrom === undefined ? undefined : taskDateBound(query.dueDateFrom, false),
+            lte: query.dueDateTo === undefined ? undefined : taskDateBound(query.dueDateTo, true),
+          },
+    };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.task.findMany({
+        where,
+        select: taskDetailsSelect,
+        orderBy: [{ [query.sortBy]: query.sortOrder }, { id: query.sortOrder }],
+        skip,
+        take: query.limit,
+      }),
+      this.prisma.task.count({ where }),
+    ], { isolationLevel: 'RepeatableRead' });
+
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
       },
-      select: taskDetailsSelect,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-    });
+    };
   }
 
   async findOne(

@@ -52,6 +52,7 @@ describe('Task reads (HTTP with Prisma stub)', () => {
   let tokenA: string;
   let tokenB: string;
   let findMany: ReturnType<typeof vi.fn>;
+  let count: ReturnType<typeof vi.fn>;
   let findFirst: ReturnType<typeof vi.fn>;
   let findMembership: ReturnType<typeof vi.fn>;
 
@@ -79,6 +80,12 @@ describe('Task reads (HTTP with Prisma stub)', () => {
         b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
       ));
     });
+    count = vi.fn(({ where }: { where: TaskWhere }) => {
+      const userId = where.organization.memberships.some.userId;
+      return Promise.resolve(isMember(where.organizationId, userId)
+        ? tasks.filter((task) => task.organizationId === where.organizationId).length
+        : 0);
+    });
     findFirst = vi.fn(({ where }: { where: TaskWhere & { id: string } }) => {
       const userId = where.organization.memberships.some.userId;
       const task = isMember(where.organizationId, userId)
@@ -89,8 +96,9 @@ describe('Task reads (HTTP with Prisma stub)', () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({
+        $transaction: (operations: Promise<unknown>[]) => Promise.all(operations),
         membership: { findUnique: findMembership },
-        task: { findMany, findFirst },
+        task: { findMany, count, findFirst },
       })
       .compile();
     app = module.createNestApplication();
@@ -130,12 +138,14 @@ describe('Task reads (HTTP with Prisma stub)', () => {
 
   it('lists only the authenticated tenant tasks in descending update order', async () => {
     await request(app.getHttpServer()).get(`/organizations/${orgA}/tasks`)
-      .set('Authorization', `Bearer ${tokenA}`).expect(200).expect([tasks[1], tasks[0]]);
+      .set('Authorization', `Bearer ${tokenA}`).expect(200).expect({
+        data: [tasks[1], tasks[0]], meta: { page: 1, limit: 20, total: 2, totalPages: 1 },
+      });
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
+      where: expect.objectContaining({
         organizationId: orgA,
         organization: { memberships: { some: { userId: userA } } },
-      },
+      }),
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       select: expect.objectContaining({
         creator: { select: { id: true, name: true } },
@@ -157,8 +167,11 @@ describe('Task reads (HTTP with Prisma stub)', () => {
 
   it('returns an empty list and supports tasks without an assignee', async () => {
     findMany.mockResolvedValueOnce([]);
+    count.mockResolvedValueOnce(0);
     await request(app.getHttpServer()).get(`/organizations/${orgA}/tasks`)
-      .set('Authorization', `Bearer ${tokenA}`).expect(200).expect([]);
+      .set('Authorization', `Bearer ${tokenA}`).expect(200).expect({
+        data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      });
     await request(app.getHttpServer()).get(`/organizations/${orgA}/tasks/${taskA}`)
       .set('Authorization', `Bearer ${tokenA}`).expect(200).expect(tasks[0]);
   });

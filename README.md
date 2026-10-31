@@ -10,7 +10,7 @@ existe; as aplicações web e mobile ainda não estão configuradas.
 - Criação e listagem de organizações; inclusão e listagem de membros com
   verificação de permissões.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
-  com validação de associação e controle de versão. Filtros ainda faltam.
+  com validação de associação, controle de versão, filtros e paginação.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
 
 As atualizações e exclusões usam concorrência otimista por `version`. O funcionamento

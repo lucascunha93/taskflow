@@ -20,6 +20,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { DeleteTaskDto } from './dto/delete-task.dto.js';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 
@@ -40,8 +41,9 @@ export class TasksController {
   findAll(
     @Param('organizationId', ParseUUIDPipe) organizationId: string,
     @Req() request: AuthenticatedRequest,
+    @Query() query: ListTasksQueryDto,
   ) {
-    return this.tasksService.findAll(organizationId, request.user.sub);
+    return this.tasksService.findAll(organizationId, request.user.sub, query);
   }
 
   @Get(':taskId')

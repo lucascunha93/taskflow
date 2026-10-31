@@ -1,15 +1,18 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 
 describe('TasksService', () => {
   let service: TasksService;
   let prisma: {
+    $transaction: ReturnType<typeof vi.fn>;
     membership: { findUnique: ReturnType<typeof vi.fn> };
     task: {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
       findFirst: ReturnType<typeof vi.fn>;
       deleteMany: ReturnType<typeof vi.fn>;
       updateManyAndReturn: ReturnType<typeof vi.fn>;
@@ -20,9 +23,10 @@ describe('TasksService', () => {
 
   beforeEach(async () => {
     prisma = {
+      $transaction: vi.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
       membership: { findUnique: vi.fn() },
       task: {
-        create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(),
+        create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(),
         deleteMany: vi.fn(), updateManyAndReturn: vi.fn(),
       },
     };
@@ -65,9 +69,10 @@ describe('TasksService', () => {
 
   it('rejects task reads by users outside the organization without querying tasks', async () => {
     prisma.membership.findUnique.mockResolvedValue(null);
-    await expect(service.findAll(organizationId, userId)).rejects.toMatchObject({ status: 404 });
+    await expect(service.findAll(organizationId, userId, new ListTasksQueryDto())).rejects.toMatchObject({ status: 404 });
     await expect(service.findOne(organizationId, 'task-b', userId)).rejects.toMatchObject({ status: 404 });
     expect(prisma.task.findMany).not.toHaveBeenCalled();
+    expect(prisma.task.count).not.toHaveBeenCalled();
     expect(prisma.task.findFirst).not.toHaveBeenCalled();
   });
 
@@ -75,14 +80,22 @@ describe('TasksService', () => {
     const tasks = [{ id: 'task-a', creator: { id: userId, name: 'Creator' }, assignee: null }];
     prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
     prisma.task.findMany.mockResolvedValue(tasks);
+    prisma.task.count.mockResolvedValue(1);
 
-    await expect(service.findAll(organizationId, userId)).resolves.toEqual(tasks);
+    await expect(service.findAll(organizationId, userId, new ListTasksQueryDto())).resolves.toEqual({
+      data: tasks, meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
     expect(prisma.membership.findUnique).toHaveBeenCalledWith({
       where: { organizationId_userId: { organizationId, userId } },
     });
     expect(prisma.task.findMany).toHaveBeenCalledWith({
-      where: { organizationId, organization: { memberships: { some: { userId } } } },
+      where: {
+        organizationId, organization: { memberships: { some: { userId } } },
+        status: undefined, assigneeId: undefined, creatorId: undefined, title: undefined, dueDate: undefined,
+      },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      skip: 0,
+      take: 20,
       select: {
         id: true, title: true, description: true, status: true, version: true,
         dueDate: true, createdAt: true, updatedAt: true, creatorId: true,
@@ -91,12 +104,54 @@ describe('TasksService', () => {
         assignee: { select: { id: true, name: true } },
       },
     });
+    expect(prisma.task.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        organizationId, organization: { memberships: { some: { userId } } },
+      }),
+    });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' });
   });
 
   it('returns an empty list for an authorized organization without tasks', async () => {
     prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
     prisma.task.findMany.mockResolvedValue([]);
-    await expect(service.findAll(organizationId, userId)).resolves.toEqual([]);
+    prisma.task.count.mockResolvedValue(0);
+    await expect(service.findAll(organizationId, userId, new ListTasksQueryDto())).resolves.toEqual({
+      data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    });
+  });
+
+  it('applies combined filters identically to data and count with database pagination', async () => {
+    const query = Object.assign(new ListTasksQueryDto(), {
+      page: 3, limit: 5, status: TaskStatus.DONE, assigneeId: 'assignee', creatorId: 'creator',
+      search: '50%_\\done', dueDateFrom: '2026-10-01', dueDateTo: '2026-10-31',
+      sortBy: 'title', sortOrder: 'asc',
+    });
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.findMany.mockResolvedValue([]);
+    prisma.task.count.mockResolvedValue(11);
+    await expect(service.findAll(organizationId, userId, query)).resolves.toEqual({
+      data: [], meta: { page: 3, limit: 5, total: 11, totalPages: 3 },
+    });
+    const where = {
+      organizationId,
+      organization: { memberships: { some: { userId } } },
+      status: TaskStatus.DONE, assigneeId: 'assignee', creatorId: 'creator',
+      title: { contains: '50\\%\\_\\\\done', mode: 'insensitive' },
+      dueDate: { gte: new Date('2026-10-01T00:00:00.000Z'), lte: new Date('2026-10-31T23:59:59.999Z') },
+    };
+    expect(prisma.task.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where, skip: 10, take: 5, orderBy: [{ title: 'asc' }, { id: 'asc' }],
+    }));
+    expect(prisma.task.count).toHaveBeenCalledWith({ where });
+  });
+
+  it('rejects offsets beyond the supported range without querying tasks', async () => {
+    const query = Object.assign(new ListTasksQueryDto(), { page: 2147483647, limit: 100 });
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    await expect(service.findAll(organizationId, userId, query)).rejects.toMatchObject({ status: 400 });
+    expect(prisma.task.findMany).not.toHaveBeenCalled();
+    expect(prisma.task.count).not.toHaveBeenCalled();
   });
 
   it('scopes detail lookup to the task, organization and authenticated member', async () => {
