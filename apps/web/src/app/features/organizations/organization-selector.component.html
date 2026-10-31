@@ -1,0 +1,41 @@
+<details class="selector" tabindex="-1" [open]="open()" (toggle)="onToggle($event)" (keydown.escape)="closeAndFocus($event)">
+  <summary #summary class="workspace" aria-label="Selecionar organização">
+    <span class="workspace-avatar" aria-hidden="true">{{ (organizations.active()?.name || 'O').slice(0, 1).toUpperCase() }}</span>
+    <span class="workspace-copy">
+      <strong>{{ organizations.active()?.name || 'Organização' }}</strong>
+      <small>
+        @switch (organizations.status()) {
+          @case ('loading') { Carregando… }
+          @case ('error') { Não foi possível carregar }
+          @case ('ready') {
+            @if (organizations.active()) { Organização ativa } @else { Selecione uma organização }
+          }
+          @default { Aguardando sessão }
+        }
+      </small>
+    </span>
+    <app-icon name="chevron" />
+  </summary>
+  <div class="selector-content">
+    @if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+      <p role="status">Carregando organizações…</p>
+    } @else if (organizations.status() === 'error') {
+      <p role="alert">Não foi possível carregar as organizações.</p>
+      <button type="button" class="selector-action" (click)="organizations.refresh()">Tentar novamente</button>
+    } @else {
+      @if (organizations.organizations().length === 0) {
+        <p>Você ainda não possui organizações.</p>
+      } @else {
+        <ul aria-label="Organizações disponíveis">
+          @for (organization of organizations.organizations(); track organization.id) {
+            <li>
+              <button type="button" class="selector-action" [attr.aria-pressed]="organizations.active()?.id === organization.id"
+                (click)="select(organization.id)">{{ organization.name }}</button>
+            </li>
+          }
+        </ul>
+      }
+      <a routerLink="/organizations/new" class="selector-action" (click)="open.set(false)">Criar organização</a>
+    }
+  </div>
+</details>

@@ -6,7 +6,8 @@ import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { AuthShellComponent } from './auth-shell.component';
-import { matchingPasswords, trimmedName } from './auth-form.validators';
+import { matchingPasswords } from './auth-form.validators';
+import { trimmedName } from '../../shared/validators/trimmed-name.validator';
 
 @Component({
   selector: 'app-register',

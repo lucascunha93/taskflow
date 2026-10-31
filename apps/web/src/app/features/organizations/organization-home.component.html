@@ -1,0 +1,30 @@
+<section class="page">
+  <p class="eyebrow">ESPAÇO DE TRABALHO</p>
+  @if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+    <h1>Suas organizações</h1>
+    <p class="description" role="status">Carregando organizações…</p>
+  } @else if (organizations.status() === 'error') {
+    <h1>Suas organizações</h1>
+    <p class="message" role="alert">Não foi possível carregar suas organizações. Verifique a conexão e tente novamente.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+  } @else if (organizations.active(); as active) {
+    @if (createdId === active.id) { <p class="notice" role="status">Organização criada e selecionada com sucesso.</p> }
+    <h1>{{ active.name }}</h1>
+    <p class="description">Esta é a sua organização ativa. Use o seletor para alternar entre organizações.</p>
+    <a class="tf-button tf-button--subtle" routerLink="/organizations/new">Criar organização</a>
+  } @else if (organizations.organizations().length === 0) {
+    <h1>Crie sua primeira organização</h1>
+    <p class="description">Uma organização reúne sua equipe e seu trabalho em um espaço compartilhado.</p>
+    <a class="tf-button" routerLink="/organizations/new">Criar organização</a>
+  } @else {
+    <h1>Escolha uma organização</h1>
+    <p class="description">Selecione o espaço de trabalho que deseja usar nesta sessão.</p>
+    <ul class="organization-list">
+      @for (organization of organizations.organizations(); track organization.id) {
+        <li><button type="button" class="organization-choice" (click)="organizations.select(organization.id)">{{ organization.name }}</button></li>
+      }
+    </ul>
+    <a class="text-link" routerLink="/organizations/new">Criar outra organização</a>
+  }
+  @if (organizations.warning()) { <p class="message" role="alert">{{ organizations.warning() }}</p> }
+</section>

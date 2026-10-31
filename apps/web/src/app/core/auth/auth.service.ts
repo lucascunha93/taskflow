@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
+import { Observable, Subject, catchError, finalize, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
 import { API_BASE_URL } from '../api-base-url';
 import { AuthUser, LoginCredentials, LoginResponse, RegisterCredentials } from './auth.models';
 
@@ -54,10 +54,12 @@ export class AuthService {
   private generation = 0;
   private restoreRequest: Observable<SessionStatus> | null = null;
   private mustClearStorage = false;
+  private readonly sessionEndedSubject = new Subject<void>();
 
   readonly status = this.statusState.asReadonly();
   readonly user = this.userState.asReadonly();
   readonly sessionExpired = this.expiredState.asReadonly();
+  readonly sessionEnded = this.sessionEndedSubject.asObservable();
 
   getToken(): string | null {
     return this.token;
@@ -178,6 +180,7 @@ export class AuthService {
     this.token = null;
     this.userState.set(null);
     this.expiredState.set(expired);
+    this.sessionEndedSubject.next();
     try {
       this.storage().removeItem(STORAGE_KEY);
       this.mustClearStorage = false;

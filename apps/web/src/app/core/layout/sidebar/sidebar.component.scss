@@ -22,7 +22,6 @@
   letter-spacing: 0.08em;
 }
 
-.workspace,
 .profile {
   display: flex;
   width: 100%;
@@ -36,24 +35,6 @@
   text-align: left;
 }
 
-.workspace {
-  margin-bottom: var(--space-10);
-  cursor: not-allowed;
-}
-
-.workspace-avatar {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: var(--radius-medium);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 700;
-}
-
-.workspace-copy,
 .profile-copy {
   display: grid;
   min-width: 0;

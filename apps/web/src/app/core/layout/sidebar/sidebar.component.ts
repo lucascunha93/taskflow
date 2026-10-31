@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { AuthUser } from '../../auth/auth.models';
 import { BrandComponent } from '../../../shared/brand/brand.component';
-import { IconComponent } from '../../../shared/icon/icon.component';
 import { NavigationComponent } from '../navigation/navigation.component';
+import { OrganizationSelectorComponent } from '../../../features/organizations/organization-selector.component';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [IconComponent, NavigationComponent, BrandComponent],
+  imports: [NavigationComponent, BrandComponent, OrganizationSelectorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss',

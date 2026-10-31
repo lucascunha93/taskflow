@@ -3,6 +3,7 @@ import { Router, RouterOutlet } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HeaderComponent } from './header/header.component';
 import { SidebarComponent } from './sidebar/sidebar.component';
+import { OrganizationsService } from '../../features/organizations/organizations.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -14,9 +15,14 @@ import { SidebarComponent } from './sidebar/sidebar.component';
 export class MainLayoutComponent {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly organizations = inject(OrganizationsService);
   protected readonly menuOpen = signal(false);
   protected readonly pageActive = signal(false);
   private readonly header = viewChild(HeaderComponent);
+
+  constructor() {
+    this.organizations.load();
+  }
 
   protected toggleMenu(): void {
     this.menuOpen.update((open) => !open);

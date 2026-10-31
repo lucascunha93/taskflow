@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { MainLayoutComponent } from './main-layout.component';
+import { OrganizationsService } from '../../features/organizations/organizations.service';
 
 @Component({ template: '<h1>Página de teste</h1>' })
 class TestPageComponent {}
@@ -17,6 +18,10 @@ describe('MainLayoutComponent', () => {
           user: signal({ id: 'user-id', name: 'Pessoa Teste', email: 'pessoa@example.test', createdAt: '2026-01-01T00:00:00.000Z' }),
           status: signal('authenticated'),
           logout: vi.fn(),
+        } },
+        { provide: OrganizationsService, useValue: {
+          load: vi.fn(), refresh: vi.fn(), select: vi.fn(),
+          active: signal(null), status: signal('ready'), organizations: signal([]), warning: signal(''),
         } },
       ],
     }).compileComponents();

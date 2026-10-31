@@ -1,0 +1,29 @@
+<section class="page">
+  <a class="text-link back" routerLink="/">← Voltar</a>
+  <p class="eyebrow">ORGANIZAÇÃO</p>
+  <h1>Criar organização</h1>
+  <p class="description">Dê um nome ao espaço de trabalho da sua equipe.</p>
+  @if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+    <p role="status">Carregando organizações…</p>
+  } @else if (organizations.status() === 'error') {
+    <p class="message" role="alert">Não foi possível carregar suas organizações. Tente novamente antes de criar outra.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="loading()">
+      @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+      <label for="organization-name">Nome da organização</label>
+      <input id="organization-name" class="tf-field" type="text" formControlName="name" autocomplete="organization"
+        [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+        [attr.aria-describedby]="form.controls.name.touched && form.controls.name.invalid ? 'organization-name-error' : 'organization-name-hint'" />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <p id="organization-name-error" class="field-error">Informe um nome com 2 a 120 caracteres.</p>
+      } @else {
+        <p id="organization-name-hint" class="hint">Você poderá criar outras organizações depois.</p>
+      }
+      <button type="submit" class="tf-button" [disabled]="loading()">
+        {{ loading() ? 'Criando…' : 'Criar organização' }}
+      </button>
+    </form>
+  }
+  @if (organizations.warning()) { <p class="message" role="alert">{{ organizations.warning() }}</p> }
+</section>
