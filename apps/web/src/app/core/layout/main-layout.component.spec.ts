@@ -37,9 +37,10 @@ describe('MainLayoutComponent', () => {
     expect(element.querySelector<HTMLAnchorElement>('.skip-link')?.getAttribute('href')).toBe('#main-content');
     const navButtons = element.querySelectorAll<HTMLButtonElement>('nav button');
     expect(Array.from(navButtons, (button) => button.textContent?.trim())).toEqual([
-      'Dashboard', 'Minhas tarefas', 'Todas as tarefas', 'Membros', 'Configurações',
+      'Dashboard', 'Minhas tarefas', 'Todas as tarefas', 'Configurações',
     ]);
     expect(Array.from(navButtons).every((button) => button.disabled)).toBe(true);
+    expect(element.querySelector<HTMLAnchorElement>('nav a')?.getAttribute('href')).toBe('/members');
     expect(element.querySelector<HTMLInputElement>('input[type="search"]')?.disabled).toBe(true);
   });
 

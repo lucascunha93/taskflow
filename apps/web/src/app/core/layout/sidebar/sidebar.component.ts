@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { AuthUser } from '../../auth/auth.models';
 import { BrandComponent } from '../../../shared/brand/brand.component';
 import { NavigationComponent } from '../navigation/navigation.component';
@@ -13,4 +13,5 @@ import { OrganizationSelectorComponent } from '../../../features/organizations/o
 })
 export class SidebarComponent {
   readonly user = input.required<AuthUser>();
+  readonly navigated = output<void>();
 }

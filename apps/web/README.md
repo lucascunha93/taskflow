@@ -1,7 +1,7 @@
 # TaskFlow Web
 
-Aplicação Angular standalone com layout responsivo, autenticação e contexto de
-organização. Membros e tarefas ainda não estão integrados. `core`, `shared` e
+Aplicação Angular standalone com layout responsivo, autenticação, organizações
+e gerenciamento inicial de membros. Tarefas ainda não estão integradas. `core`, `shared` e
 os diretórios de `features` organizam a evolução por domínio.
 
 ## Layout e estilos
@@ -9,8 +9,8 @@ os diretórios de `features` organizam a evolução por domínio.
 O layout em `src/app/core/layout` separa cabeçalho, sidebar e navegação. Em
 celulares, o menu expande a navegação no fluxo da página e pode ser fechado
 com Escape. O perfil exibe os dados recebidos de `/auth/me` e permite sair.
-O seletor permite escolher organizações reais; busca e navegação de negócio
-permanecem desabilitadas.
+O seletor permite escolher organizações reais e a navegação de membros está
+disponível; busca e demais itens de negócio permanecem desabilitados.
 
 Tokens e estilos reutilizáveis ficam em `src/styles/`: cores e dimensões usam
 propriedades CSS, enquanto os breakpoints são variáveis SCSS. Os ícones são
@@ -54,7 +54,23 @@ que a organização está na lista retornada pela API. Logout ou expiração lim
 o contexto e tentam remover a seleção; falhas de armazenamento são informadas.
 O ID armazenado é apenas contexto de navegação, não prova de autorização:
 o backend continua responsável por verificar a associação em cada operação.
-Páginas futuras dependentes de organização precisarão proteger seu próprio acesso.
+Páginas dependentes de organização precisam tratar a ausência de contexto.
+
+## Membros
+
+Em `/members`, a aplicação consulta `GET /organizations/:organizationId/members`
+para a organização ativa. Uma troca de organização ou saída da página limpa a
+lista e cancela requisições pendentes; respostas de outro contexto não são
+exibidas. Sem organização ativa, a página orienta a selecionar ou criar uma.
+
+Proprietários podem adicionar usuários já cadastrados como ADMIN ou MEMBER;
+administradores podem adicionar somente MEMBER. Membros podem consultar a lista,
+mas não adicionar pessoas. O formulário chama
+`POST /organizations/:organizationId/members` com `{ email, role }`; não envia
+convites. Erros 403 e 409 são informados, assim como 404, que a API usa tanto
+para usuário inexistente quanto para organização inacessível. As permissões
+visuais são apenas orientação: o backend verifica cada operação. Uma requisição
+cancelada no navegador ainda pode ter sido processada pelo servidor.
 
 ## Requisitos e comandos
 

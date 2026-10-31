@@ -9,6 +9,13 @@
         </button>
       </li>
     }
+    <li>
+      <a class="nav-item" routerLink="/members" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
+        (click)="navigated.emit()">
+        <app-icon name="members" />
+        <span>Membros</span>
+      </a>
+    </li>
   </ul>
   <p class="nav-label nav-label--secondary">ORGANIZAÇÃO</p>
   <ul>

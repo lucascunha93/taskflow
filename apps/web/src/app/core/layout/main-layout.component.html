@@ -3,7 +3,7 @@
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
   <app-header [user]="user" [menuOpen]="menuOpen()" (menuToggle)="toggleMenu()" (logout)="logout()" />
   <aside id="primary-sidebar" class="sidebar" [class.sidebar--open]="menuOpen()">
-    <app-sidebar [user]="user" />
+    <app-sidebar [user]="user" (navigated)="menuOpen.set(false)" />
   </aside>
   <main id="main-content" class="main" tabindex="-1">
     <div class="content">

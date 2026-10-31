@@ -1,0 +1,81 @@
+<section class="page">
+  <p class="eyebrow">ORGANIZAÇÃO</p>
+  <h1>Membros</h1>
+  @if (organizations.active(); as organization) {
+    <p class="description">{{ organization.name }}</p>
+    @if (members.status() === 'loading') {
+      <p role="status">Carregando membros…</p>
+    } @else if (members.status() === 'error') {
+      <p class="message" role="alert">{{ members.loadError() }}</p>
+      <button type="button" class="tf-button tf-button--subtle" (click)="members.refresh()">Tentar novamente</button>
+    } @else if (members.status() === 'ready') {
+      <div class="list-heading">
+        <h2>Pessoas na organização</h2>
+        <span>{{ members.members().length }} {{ members.members().length === 1 ? 'membro' : 'membros' }}</span>
+      </div>
+      @if (members.members().length === 0) {
+        <p class="empty">Nenhum membro encontrado nesta organização.</p>
+      } @else {
+        <ul class="member-list">
+          @for (member of members.members(); track member.id) {
+            <li class="member">
+              <span class="tf-avatar" aria-hidden="true">{{ member.user.name.slice(0, 1).toUpperCase() }}</span>
+              <span class="identity"><strong>{{ member.user.name }}</strong><span>{{ member.user.email }}</span></span>
+              <span class="tf-badge">
+                @switch (member.role) {
+                  @case ('OWNER') { Proprietário }
+                  @case ('ADMIN') { Administrador }
+                  @case ('MEMBER') { Membro }
+                }
+              </span>
+            </li>
+          }
+        </ul>
+      }
+      @if (organization.role === 'OWNER' || organization.role === 'ADMIN') {
+        <section class="add-section" aria-labelledby="add-member-title">
+          <h2 id="add-member-title">Adicionar membro</h2>
+          <p>Adicione à organização uma pessoa que já tenha uma conta no TaskFlow.</p>
+          @if (members.success()) { <p class="notice" role="status">{{ members.success() }}</p> }
+          @if (members.addError()) {
+            <p class="message" role="alert">{{ members.addError() }}</p>
+            <button type="button" class="tf-button tf-button--subtle retry" (click)="members.refresh()">Atualizar lista</button>
+          }
+          <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="members.adding()">
+            <fieldset [disabled]="members.adding()">
+            <div class="field">
+              <label for="member-email">E-mail</label>
+              <input id="member-email" class="tf-field" type="email" formControlName="email" autocomplete="email"
+                [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+                [attr.aria-describedby]="form.controls.email.touched && form.controls.email.invalid ? 'member-email-error' : null" />
+              @if (form.controls.email.touched && form.controls.email.invalid) {
+                <p id="member-email-error" class="field-error">Informe um e-mail válido com até 254 caracteres.</p>
+              }
+            </div>
+            <div class="field">
+              <label for="member-role">Função</label>
+              <select id="member-role" class="tf-field" formControlName="role">
+                <option value="MEMBER">Membro</option>
+                @if (organization.role === 'OWNER') { <option value="ADMIN">Administrador</option> }
+              </select>
+            </div>
+            </fieldset>
+            <button type="submit" class="tf-button" [disabled]="members.adding()">
+              {{ members.adding() ? 'Adicionando…' : 'Adicionar membro' }}
+            </button>
+          </form>
+        </section>
+      } @else {
+        <p class="guidance">Somente proprietários e administradores podem adicionar membros.</p>
+      }
+    }
+  } @else if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+    <p role="status">Carregando organizações…</p>
+  } @else if (organizations.status() === 'error') {
+    <p class="message" role="alert">Não foi possível carregar suas organizações.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+  } @else {
+    <p class="description">Selecione ou crie uma organização para visualizar seus membros.</p>
+    <a class="tf-button tf-button--subtle" routerLink="/">Escolher organização</a>
+  }
+</section>

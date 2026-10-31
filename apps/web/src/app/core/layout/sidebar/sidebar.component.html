@@ -4,7 +4,7 @@
   <div class="workspace-label">ORGANIZAÇÃO</div>
   <app-organization-selector />
 
-  <app-navigation />
+  <app-navigation (navigated)="navigated.emit()" />
 
   <div class="sidebar-footer">
     <div class="profile">
