@@ -1,0 +1,31 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.05em;
+}
+
+.brand-dot { color: var(--color-primary); }
+
+.brand-mark {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 9px;
+  background: var(--color-primary);
+}
+
+.brand-mark span {
+  width: 3px;
+  height: 11px;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.brand-mark span:nth-child(2) { height: 17px; }

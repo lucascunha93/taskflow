@@ -1,0 +1,28 @@
+@if (auth.user(); as user) {
+<div class="layout">
+  <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+  <app-header [user]="user" [menuOpen]="menuOpen()" (menuToggle)="toggleMenu()" (logout)="logout()" />
+  <aside id="primary-sidebar" class="sidebar" [class.sidebar--open]="menuOpen()">
+    <app-sidebar [user]="user" />
+  </aside>
+  <main id="main-content" class="main" tabindex="-1">
+    <div class="content">
+      @if (!pageActive()) {
+        <div class="intro">
+          <span class="tf-badge">ESTRUTURA INICIAL</span>
+          <h1>Seu espaço de trabalho, com mais clareza.</h1>
+          <p>Um lugar para organizar o trabalho da sua equipe e acompanhar o que importa.</p>
+        </div>
+        <div class="notice">
+          <span class="notice-line" aria-hidden="true"></span>
+          <div>
+            <h2>Uma base para o trabalho em equipe</h2>
+            <p>Esta é uma prévia do layout. A navegação e a busca serão conectadas em próximas etapas.</p>
+          </div>
+        </div>
+      }
+      <router-outlet (activate)="pageActive.set(true)" (deactivate)="pageActive.set(false)" />
+    </div>
+  </main>
+</div>
+}

@@ -1,0 +1,40 @@
+<header class="header">
+  <div class="header-leading">
+    <button
+      #menuButton
+      type="button"
+      class="menu-toggle tf-button tf-button--subtle"
+      aria-controls="primary-sidebar"
+      [attr.aria-expanded]="menuOpen()"
+      [attr.aria-label]="menuOpen() ? 'Fechar navegação' : 'Abrir navegação'"
+      (click)="menuToggle.emit()"
+    >
+      <app-icon [name]="menuOpen() ? 'close' : 'menu'" />
+    </button>
+    <div class="breadcrumb">
+      <span>TaskFlow</span>
+      <span class="separator" aria-hidden="true">/</span>
+      <strong>Espaço de trabalho</strong>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="search">
+      <app-icon name="search" />
+      <input class="tf-field" type="search" aria-label="Busca ainda não disponível"
+        placeholder="Buscar" disabled />
+    </div>
+    <details class="profile-menu">
+      <summary class="header-profile" aria-label="Menu de perfil de {{ user().name }}">
+        <span class="tf-avatar" aria-hidden="true">{{ user().name.slice(0, 1).toUpperCase() }}</span>
+        <app-icon name="chevron" />
+      </summary>
+      <div class="profile-dropdown tf-menu">
+        <div class="profile-identity">
+          <strong>{{ user().name }}</strong>
+          <span>{{ user().email }}</span>
+        </div>
+        <button type="button" class="logout" (click)="logout.emit()">Sair</button>
+      </div>
+    </details>
+  </div>
+</header>

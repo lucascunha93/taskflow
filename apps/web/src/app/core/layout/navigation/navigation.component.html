@@ -1,0 +1,22 @@
+<nav aria-label="Navegação principal">
+  <p class="nav-label">ESPAÇO DE TRABALHO</p>
+  <ul>
+    @for (item of workspaceItems; track item.label) {
+      <li>
+        <button type="button" class="nav-item" disabled title="Disponível em uma próxima etapa">
+          <app-icon [name]="item.icon" />
+          <span>{{ item.label }}</span>
+        </button>
+      </li>
+    }
+  </ul>
+  <p class="nav-label nav-label--secondary">ORGANIZAÇÃO</p>
+  <ul>
+    <li>
+      <button type="button" class="nav-item" disabled title="Disponível em uma próxima etapa">
+        <app-icon name="settings" />
+        <span>Configurações</span>
+      </button>
+    </li>
+  </ul>
+</nav>

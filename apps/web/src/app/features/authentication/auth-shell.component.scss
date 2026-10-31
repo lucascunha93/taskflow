@@ -1,0 +1,27 @@
+.auth-shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(2rem, 6vh, 4rem) var(--space-5);
+}
+
+.brand {
+  text-decoration: none;
+}
+
+.panel {
+  width: min(100%, 440px);
+  margin: auto 0;
+  padding: clamp(1.5rem, 5vw, 2.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface);
+}
+
+.footer {
+  margin: var(--space-8) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  text-align: center;
+}

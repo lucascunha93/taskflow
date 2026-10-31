@@ -22,11 +22,12 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('renders the application shell and router outlet', async () => {
+  it('renders the public login route and router outlet without a session', async () => {
     const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/login');
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('TaskFlow');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Entre na sua conta');
     expect(compiled.querySelector('router-outlet')).not.toBeNull();
   });
 

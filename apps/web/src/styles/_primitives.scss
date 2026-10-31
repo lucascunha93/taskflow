@@ -1,0 +1,90 @@
+.tf-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-medium);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tf-button:not(:disabled):hover {
+  background: var(--color-primary-hover);
+}
+
+.tf-button--subtle {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.tf-button--subtle:not(:disabled):hover {
+  background: var(--color-surface-hover);
+}
+
+.tf-field {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.tf-field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.tf-field:not(:disabled):hover {
+  border-color: var(--color-border-strong);
+}
+
+.tf-button:disabled,
+.tf-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.tf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-round);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+.tf-avatar {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-medium);
+  background: #e9eef8;
+  color: #355586;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+}
+
+.tf-surface {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface);
+}
+
+.tf-menu {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-menu);
+}

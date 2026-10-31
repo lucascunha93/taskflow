@@ -1,0 +1,49 @@
+<app-auth-shell>
+  <p class="eyebrow">Comece com o TaskFlow</p>
+  <h1>Crie sua conta</h1>
+  <p class="intro">Organize o trabalho da sua equipe em um só lugar.</p>
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="loading()">
+    @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+    <div class="field">
+      <label for="register-name">Nome</label>
+      <input id="register-name" class="tf-field" type="text" formControlName="name" autocomplete="name"
+        [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+        [attr.aria-describedby]="form.controls.name.touched && form.controls.name.invalid ? 'register-name-error' : null" />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <p id="register-name-error" class="field-error">Informe um nome com 2 a 120 caracteres.</p>
+      }
+    </div>
+    <div class="field">
+      <label for="register-email">E-mail</label>
+      <input id="register-email" class="tf-field" type="email" formControlName="email" autocomplete="email"
+        [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+        [attr.aria-describedby]="form.controls.email.touched && form.controls.email.invalid ? 'register-email-error' : null" />
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <p id="register-email-error" class="field-error">Informe um e-mail válido com até 254 caracteres.</p>
+      }
+    </div>
+    <div class="field">
+      <label for="register-password">Senha</label>
+      <input id="register-password" class="tf-field" type="password" formControlName="password" autocomplete="new-password"
+        [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+        [attr.aria-describedby]="form.controls.password.touched && form.controls.password.invalid ? 'register-password-hint register-password-error' : 'register-password-hint'" />
+      <p id="register-password-hint" class="hint">Use de 12 a 128 caracteres.</p>
+      @if (form.controls.password.touched && form.controls.password.invalid) {
+        <p id="register-password-error" class="field-error">A senha deve ter de 12 a 128 caracteres.</p>
+      }
+    </div>
+    <div class="field">
+      <label for="register-confirmation">Confirme a senha</label>
+      <input id="register-confirmation" class="tf-field" type="password" formControlName="confirmation" autocomplete="new-password"
+        [attr.aria-invalid]="form.controls.confirmation.touched && (form.controls.confirmation.invalid || form.hasError('passwordMismatch'))"
+        [attr.aria-describedby]="form.controls.confirmation.touched && (form.controls.confirmation.invalid || form.hasError('passwordMismatch')) ? 'register-confirmation-error' : null" />
+      @if (form.controls.confirmation.touched && (form.controls.confirmation.invalid || form.hasError('passwordMismatch'))) {
+        <p id="register-confirmation-error" class="field-error">As senhas devem ser iguais.</p>
+      }
+    </div>
+    <button class="tf-button submit" type="submit" [disabled]="loading()">
+      {{ loading() ? 'Criando conta…' : 'Criar conta' }}
+    </button>
+  </form>
+  <p class="switch">Já tem uma conta? <a routerLink="/login">Entrar</a></p>
+</app-auth-shell>

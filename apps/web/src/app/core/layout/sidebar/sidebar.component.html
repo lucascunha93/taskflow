@@ -1,0 +1,25 @@
+<div class="sidebar">
+  <app-brand class="brand" />
+
+  <div class="workspace-label">ORGANIZAÇÃO</div>
+  <button type="button" class="workspace" disabled title="Seleção de organização ainda não disponível">
+    <span class="workspace-avatar" aria-hidden="true">O</span>
+    <span class="workspace-copy">
+      <strong>Organização</strong>
+      <small>Seleção em breve</small>
+    </span>
+    <app-icon name="chevron" />
+  </button>
+
+  <app-navigation />
+
+  <div class="sidebar-footer">
+    <div class="profile">
+      <span class="tf-avatar" aria-hidden="true">{{ user().name.slice(0, 1).toUpperCase() }}</span>
+      <span class="profile-copy">
+        <strong>{{ user().name }}</strong>
+        <small>{{ user().email }}</small>
+      </span>
+    </div>
+  </div>
+</div>

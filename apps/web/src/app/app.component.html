@@ -1,4 +1,4 @@
-<main>
-  <h1>TaskFlow</h1>
-  <router-outlet />
-</main>
+<router-outlet />
+@if (auth.status() === 'loading') {
+  <p class="session-loading" role="status">Verificando sessão…</p>
+}
