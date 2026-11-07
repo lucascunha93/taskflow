@@ -14,6 +14,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import type { Request } from 'express';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 
 interface AuthenticatedRequest extends Request {
@@ -27,12 +28,14 @@ export class AuthController {
     constructor(private readonly authService: AuthService) { }
 
     @Post('register')
+    @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.CREATED)
     register(@Body() dto: RegisterDto) {
         return this.authService.register(dto);
     }
 
     @Post('login')
+    @UseGuards(ThrottlerGuard)
     login(@Body() dto: LoginDto) {
         return this.authService.login(dto);
     }

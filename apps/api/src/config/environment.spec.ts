@@ -1,0 +1,36 @@
+import { parseCorsOrigins, validateEnvironment } from './environment.js';
+
+describe('validateEnvironment', () => {
+  const valid = {
+    JWT_SECRET: 'test-only-secret-at-least-32-characters',
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+  };
+
+  it('accepts a minimal valid configuration and optional settings', () => {
+    expect(validateEnvironment(valid)).toBe(valid);
+    expect(() => validateEnvironment({
+      ...valid, PORT: '8080', TRUST_PROXY: '1', CORS_ORIGINS: 'https://app.example.test, http://localhost:4200',
+    })).not.toThrow();
+  });
+
+  it('reports every invalid value at once', () => {
+    expect(() => validateEnvironment({
+      JWT_SECRET: 'short', DATABASE_URL: 'mysql://db', PORT: '70000', TRUST_PROXY: 'yes', CORS_ORIGINS: '*',
+    })).toThrow(/JWT_SECRET[\s\S]*DATABASE_URL[\s\S]*PORT[\s\S]*TRUST_PROXY[\s\S]*CORS_ORIGINS/);
+  });
+});
+
+describe('parseCorsOrigins', () => {
+  it('returns no origins when unset so CORS stays disabled', () => {
+    expect(parseCorsOrigins(undefined)).toEqual([]);
+    expect(parseCorsOrigins('  ')).toEqual([]);
+  });
+
+  it('accepts exact origins only', () => {
+    expect(parseCorsOrigins('https://app.example.test,http://localhost:4200'))
+      .toEqual(['https://app.example.test', 'http://localhost:4200']);
+    for (const value of ['*', 'https://app.example.test/', 'https://app.example.test/path', 'ftp://files.example.test']) {
+      expect(() => parseCorsOrigins(value)).toThrow(/CORS_ORIGINS/);
+    }
+  });
+});

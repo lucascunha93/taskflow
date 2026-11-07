@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtModule, JwtService } from '@nestjs/jwt';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
@@ -36,7 +37,10 @@ describe('Authenticated HTTP endpoints', () => {
       user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     };
     const module = await Test.createTestingModule({
-      imports: [JwtModule.register({ secret: 'test-only-signing-key-not-used-in-production' })],
+      imports: [
+        JwtModule.register({ secret: 'test-only-signing-key-not-used-in-production' }),
+        ThrottlerModule.forRoot([{ name: 'auth', ttl: 60_000, limit: 3 }]),
+      ],
       controllers: [AuthController, OrganizationsController, TasksController],
       providers: [
         AuthService, OrganizationsService, TasksService, JwtAuthGuard,
@@ -195,4 +199,17 @@ describe('Authenticated HTTP endpoints', () => {
     expect(response.body).toMatchObject({ id: orgId, name: 'Equipe', slug: 'equipe', role: 'ADMIN' });
   });
 
+  it('rate limits login attempts per client before checking credentials', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await request(app.getHttpServer()).post('/auth/login')
+        .send({ email: 'someone@example.test', password: 'wrong-password-123' }).expect(401);
+    }
+    await request(app.getHttpServer()).post('/auth/login')
+      .send({ email: 'someone@example.test', password: 'wrong-password-123' }).expect(429);
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(3);
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', `Bearer ${token}`).expect((response) => {
+      expect(response.status).not.toBe(429);
+    });
+  });
 });

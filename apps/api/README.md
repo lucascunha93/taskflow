@@ -15,7 +15,14 @@ não existir. Preencha valores próprios:
 | `DATABASE_URL` | Conexão PostgreSQL usada pela API e pelos comandos Prisma. |
 | `JWT_SECRET` | Segredo de assinatura JWT, com pelo menos 32 caracteres. |
 | `PORT` | Porta HTTP; padrão `3000`. |
+| `CORS_ORIGINS` | Opcional. Origens exatas permitidas, separadas por vírgula (ex.: `https://app.example.com`). Sem valor, o CORS fica desabilitado. |
+| `TRUST_PROXY` | Opcional. Número de proxies reversos confiáveis (0 a 10), para que o rate limiting use o IP real do cliente. |
 | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | Par de configuração do NestJS Observe, quando utilizado. |
+
+As variáveis são validadas na inicialização (`src/config/environment.ts`): um
+`JWT_SECRET` curto, uma `DATABASE_URL` que não seja PostgreSQL, uma porta
+inválida ou uma origem CORS com caminho, barra final ou `*` impedem a API de
+subir e listam todos os problemas encontrados.
 
 O workspace da API executa seus scripts a partir de `apps/api`, onde o
 `dotenv` do Prisma e o `ConfigModule` do Nest leem `.env`. Variáveis já
@@ -125,12 +132,29 @@ de produção.
 | GET | `/health` | Não |
 | POST | `/auth/register` | Não |
 | POST | `/auth/login` | Não |
-| GET | `/auth/me` | JWT |
+| GET, PATCH | `/auth/me` | JWT |
 | POST, GET | `/organizations` | JWT |
+| PATCH | `/organizations/:organizationId` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
 | GET | `/organizations/:organizationId/tasks/summary` | JWT |
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
+
+### Perfil e organização
+
+`PATCH /auth/me` aceita somente `{ "name": "..." }` (2 a 120 caracteres após
+remover espaços) e altera o usuário identificado pelo JWT. E-mail, senha e
+outros campos são rejeitados com 400; a resposta tem o mesmo formato de
+`GET /auth/me`, sem o hash da senha.
+
+`PATCH /organizations/:organizationId` aceita somente `{ "name": "..." }`, com
+as mesmas regras de tamanho. Somente OWNER e ADMIN podem renomear (MEMBER
+recebe 403); quem não pertence à organização recebe 404. A autorização é
+repetida na própria escrita, condicionada à associação com papel OWNER ou
+ADMIN, em uma única operação. O `slug` não muda. A resposta contém `id`,
+`name`, `slug`, `createdAt` e o `role` do solicitante.
+
+### Tarefas
 
 A criação de tarefas valida a associação do solicitante e do responsável.
 O `POST` aceita `title`, `description`, `assigneeId`, `dueDate` e `status`
@@ -230,6 +254,21 @@ ao identificador, à organização, à associação e à versão em uma única
 operação. O sucesso retorna 204 sem corpo; organização inacessível ou tarefa
 inexistente na organização retorna 404; versão desatualizada retorna 409.
 
-O Observe é configurado em `AppModule`; revise suas credenciais e política de
-telemetria antes de uso. Rate limiting, renovação de sessão e configuração
-de produção ainda precisam ser avaliados.
+## Segurança HTTP
+
+- **Helmet** adiciona cabeçalhos de segurança padrão e remove `X-Powered-By`.
+- **CORS** é opt-in por `CORS_ORIGINS`, com origens exatas, métodos
+  `GET, POST, PUT, PATCH, DELETE` e cabeçalhos `Authorization` e
+  `Content-Type`. Não há cookies: a autenticação usa Bearer token.
+- **Rate limiting** (`@nestjs/throttler`): `POST /auth/login` e
+  `POST /auth/register` aceitam 10 requisições por minuto por IP e rota; o
+  excedente recebe 429. A contagem fica em memória, então cada instância conta
+  separadamente e os contadores reiniciam com o processo. Para várias instâncias,
+  avalie um armazenamento compartilhado. Atrás de um proxy reverso, configure
+  `TRUST_PROXY`; caso contrário, todos os clientes compartilham o IP do proxy.
+
+O Observe é configurado em `AppModule` e é registrado mesmo sem
+`OBSERVE_APP_KEY`/`OBSERVE_APP_SECRET`, usando valores de exemplo; revise suas
+credenciais e política de telemetria antes do uso. Renovação e revogação de
+sessão, proteção de brute force por conta (além do limite por IP) e a
+configuração de produção ainda precisam ser avaliadas.
