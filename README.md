@@ -7,14 +7,17 @@ não está configurada.
 
 ## Estado atual
 
-- Cadastro, login com Argon2id e JWT, e perfil autenticado.
-- Criação e listagem de organizações; inclusão e listagem de membros com
-  verificação de permissões.
+- Cadastro, login com Argon2id e JWT, perfil autenticado e alteração do nome.
+- Criação, listagem e renomeação de organizações; inclusão e listagem de
+  membros com verificação de permissões.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
   com validação de associação, controle de versão, filtros e paginação.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
-- Frontend Angular standalone com autenticação, organizações, membros, gestão
-  de tarefas e dashboard com indicadores reais da organização ativa.
+- Validação de variáveis de ambiente, Helmet, CORS opt-in e rate limiting em
+  login e cadastro.
+- Frontend Angular standalone com autenticação, organizações, configurações da
+  organização, perfil, membros, gestão de tarefas ("Minhas tarefas" e busca no
+  cabeçalho) e dashboard com indicadores reais da organização ativa.
 
 As atualizações e exclusões usam concorrência otimista por `version`. O funcionamento
 offline e a sincronização mobile são planos futuros, não funcionalidades

@@ -9,9 +9,10 @@ os diretórios de `features` organizam a evolução por domínio.
 O layout em `src/app/core/layout` separa cabeçalho, sidebar e navegação. Em
 celulares, o menu expande a navegação no fluxo da página e pode ser fechado
 com Escape. O perfil exibe os dados recebidos de `/auth/me` e permite sair.
-O seletor permite escolher organizações reais; membros e todas as tarefas estão
-disponíveis na navegação. A busca do cabeçalho e os demais itens ainda não
-estão conectados.
+O seletor permite escolher organizações reais. A navegação leva ao dashboard, a
+"Minhas tarefas" (`/tasks?assignee=me`), a todas as tarefas, aos membros e às
+configurações da organização; o menu do usuário dá acesso ao perfil. A busca do
+cabeçalho abre `/tasks?search=<texto>` na organização ativa e limpa o campo.
 
 Tokens e estilos reutilizáveis ficam em `src/styles/`: cores e dimensões usam
 propriedades CSS, enquanto os breakpoints são variáveis SCSS. Os ícones são
@@ -75,6 +76,22 @@ não é um histórico de atividades. Ao trocar de organização, dados anteriore
 são ocultados e requisições pendentes canceladas ou ignoradas; a autorização
 continua sendo responsabilidade do backend.
 
+## Perfil
+
+Em `/profile`, o usuário consulta e-mail e data de cadastro, vê o papel em cada
+organização e altera o nome de exibição por `PATCH /auth/me`. O nome atualizado
+passa a ser exibido no cabeçalho e na sidebar. O e-mail não pode ser alterado e
+ainda não há troca de senha.
+
+## Configurações da organização
+
+Em `/settings`, a página mostra identificador (`slug`), data de criação e o
+papel do usuário na organização ativa. Proprietários e administradores podem
+renomeá-la por `PATCH /organizations/:organizationId`; membros veem os dados
+somente para leitura. Trocar de organização descarta edições e mensagens
+pendentes. Um 403 ou 404 da API é informado; a permissão visual é apenas
+orientação.
+
 ## Membros
 
 Em `/members`, a aplicação consulta `GET /organizations/:organizationId/members`
@@ -97,8 +114,10 @@ Em `/tasks`, a organização ativa determina todas as operações. A página con
 o resultado paginado da API, permite buscar por título, filtrar por status,
 responsável, criador e período de vencimento e escolher ordenação e tamanho da
 página. A pesquisa e os filtros aguardam 300 ms antes da consulta e reiniciam a
-paginação. Os filtros ficam no estado da página, não na URL; são reiniciados ao
-trocar de organização. As opções de pessoas usam os membros e as pessoas das
+paginação. A URL aceita dois filtros iniciais: `assignee=me`, que filtra pelo
+usuário autenticado e muda o título para "Minhas tarefas", e `search`. Os demais
+filtros ficam no estado da página, não na URL. Trocar de organização ou de
+parâmetros da URL reinicia os filtros. As opções de pessoas usam os membros e as pessoas das
 tarefas carregadas. Para filtros por data, o backend interpreta dias em UTC.
 
 Criação e edição permitem título, descrição, status, responsável e prazo. A
@@ -140,15 +159,16 @@ A aplicação disponibiliza a URL pelo token `API_BASE_URL` em
 - `src/environments/environment.development.ts`: desenvolvimento, por padrão
   a mesma origem. O proxy da CLI encaminha `/auth`, `/organizations` e os
   endpoints de membros e tarefas para `http://localhost:3000`, preservando
-  a rota Angular `/organizations/new`; inicie a API separadamente.
+  a rota Angular `/organizations/new`. `PATCH /organizations/:id` é
+  encaminhado somente quando o ID tem formato UUID. Inicie a API separadamente.
 - `src/environments/environment.ts`: produção, por padrão vazio, representando
   a mesma origem da aplicação. O servidor de produção deve encaminhar as rotas
   da API para o backend, ou a URL deve ser configurada antes do build.
 
 O Angular substitui o arquivo de produção pelo de desenvolvimento no build
 `development`. Valores são incorporados ao bundle público: nunca coloque
-segredos ou credenciais nesses arquivos. A API atual não configura CORS: uma
-URL de API em outra origem exige política CORS apropriada no backend. Em
+segredos ou credenciais nesses arquivos. Por padrão a API não habilita CORS:
+uma URL de API em outra origem exige configurar `CORS_ORIGINS` no backend. Em
 produção, encaminhe os endpoints da API sem interceptar a rota do frontend
 `/organizations/new`, e sirva o frontend nas rotas da aplicação. Os testes usam HTTP simulado e não substituem
 testes de integração com a API e banco reais.

@@ -210,15 +210,17 @@ Já implementado:
 - Login.
 - Hash de senha com Argon2id.
 - Emissão de JWT.
-- Endpoint de perfil autenticado.
+- Endpoint de perfil autenticado e alteração do nome.
 - Guard de autenticação.
+- Rate limiting em login e cadastro.
 
 Endpoints:
 
 ```http
-POST /auth/register
-POST /auth/login
-GET  /auth/me
+POST  /auth/register
+POST  /auth/login
+GET   /auth/me
+PATCH /auth/me
 ```
 
 ### Organizações
@@ -231,29 +233,33 @@ Já implementado:
 - Inclusão de membros.
 - Listagem de membros.
 - Controle de permissões para inclusão de membros.
+- Renomeação da organização por OWNER ou ADMIN.
 
 Endpoints:
 
 ```http
-POST /organizations
-GET  /organizations
-POST /organizations/:organizationId/members
-GET  /organizations/:organizationId/members
+POST  /organizations
+GET   /organizations
+PATCH /organizations/:organizationId
+POST  /organizations/:organizationId/members
+GET   /organizations/:organizationId/members
 ```
 
 ### Tarefas
 
-O módulo de tarefas está em implementação.
+O CRUD de tarefas está implementado, com validação de associação, responsável
+membro da organização, filtros, ordenação, paginação, concorrência otimista por
+`version` (409 em conflito) e resumo para o dashboard. Os contratos estão
+documentados em `apps/api/README.md`.
 
-Já existe a estrutura inicial de:
-
-- TasksModule.
-- TasksController.
-- TasksService.
-- CreateTaskDto.
-- UpdateTaskDto.
-
-A criação de tarefas está sendo implementada com validação de associação à organização.
+```http
+POST   /organizations/:organizationId/tasks
+GET    /organizations/:organizationId/tasks
+GET    /organizations/:organizationId/tasks/summary
+GET    /organizations/:organizationId/tasks/:taskId
+PUT    /organizations/:organizationId/tasks/:taskId
+DELETE /organizations/:organizationId/tasks/:taskId?version=N
+```
 
 O Copilot deve verificar a implementação atual antes de continuar.
 
