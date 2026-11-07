@@ -30,6 +30,21 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     errors.push('TRUST_PROXY precisa ser o número de proxies confiáveis, entre 0 e 10.');
   }
 
+  const refreshDays = text('REFRESH_TOKEN_TTL_DAYS');
+  if (refreshDays !== undefined && !isIntegerInRange(refreshDays, 1, 90)) {
+    errors.push('REFRESH_TOKEN_TTL_DAYS precisa ser um inteiro entre 1 e 90.');
+  }
+
+  const cookieSecure = text('REFRESH_COOKIE_SECURE');
+  if (cookieSecure !== undefined && cookieSecure !== 'true' && cookieSecure !== 'false') {
+    errors.push('REFRESH_COOKIE_SECURE precisa ser true ou false.');
+  }
+
+  const cookiePath = text('REFRESH_COOKIE_PATH');
+  if (cookiePath !== undefined && !/^\/[A-Za-z0-9/_-]*$/.test(cookiePath)) {
+    errors.push('REFRESH_COOKIE_PATH precisa ser um caminho iniciado por /.');
+  }
+
   if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
     errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
   }

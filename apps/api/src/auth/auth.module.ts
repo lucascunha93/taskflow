@@ -6,6 +6,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
+import { RefreshCookieService, RefreshRequestGuard } from './refresh-cookie.js';
+import { RefreshTokensService } from './refresh-tokens.service.js';
 
 @Module({
   imports: [
@@ -34,7 +36,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, RefreshTokensService, RefreshCookieService, RefreshRequestGuard],
   exports: [AuthService, JwtAuthGuard, JwtModule],
 })
 export class AuthModule { }

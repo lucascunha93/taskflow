@@ -4,6 +4,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { AuthService, LOGIN_LOCK_MS, MAX_FAILED_LOGINS } from './auth.service.js';
+import { RefreshTokensService } from './refresh-tokens.service.js';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -14,19 +15,39 @@ describe('AuthService', () => {
       update: ReturnType<typeof vi.fn>;
       updateMany: ReturnType<typeof vi.fn>;
     };
+    $transaction: ReturnType<typeof vi.fn>;
   };
+  let refreshTokens: {
+    issue: ReturnType<typeof vi.fn>;
+    rotate: ReturnType<typeof vi.fn>;
+    revokeFamilyOf: ReturnType<typeof vi.fn>;
+    revokeAllForUser: ReturnType<typeof vi.fn>;
+  };
+  const issued = { id: 'refresh-id', token: 'refresh-token', expiresAt: new Date('2030-01-01T00:00:00Z') };
   let jwt: { signAsync: ReturnType<typeof vi.fn> };
   const password = 'valid-test-password';
   const user = { id: 'user', name: 'User', email: 'user@example.test' };
 
   beforeEach(async () => {
-    prisma = { user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() } };
+    prisma = {
+      user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+      $transaction: vi.fn(),
+    };
+    // A transação interativa recebe o próprio stub como cliente.
+    prisma.$transaction.mockImplementation((callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
+    refreshTokens = {
+      issue: vi.fn().mockResolvedValue(issued),
+      rotate: vi.fn(),
+      revokeFamilyOf: vi.fn().mockResolvedValue(undefined),
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+    };
     jwt = { signAsync: vi.fn().mockResolvedValue('signed-test-token') };
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwt },
+        { provide: RefreshTokensService, useValue: refreshTokens },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -106,18 +127,21 @@ describe('AuthService', () => {
 
   it('accepts a login after the lock expires and resets the failure state', async () => {
     prisma.user.findUnique.mockResolvedValue(await stored({ failedLoginAttempts: 3, lockedUntil: new Date(Date.now() - 1) }));
-    await expect(service.login({ email: user.email, password })).resolves.toMatchObject({ accessToken: 'signed-test-token' });
+    await expect(service.login({ email: user.email, password }))
+      .resolves.toMatchObject({ response: { accessToken: 'signed-test-token' } });
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null },
     });
   });
 
-  it('signs the authenticated user ID and excludes the password hash', async () => {
+  it('signs the authenticated user ID, excludes the password hash and starts a refresh session', async () => {
     prisma.user.findUnique.mockResolvedValue(await stored());
     await expect(service.login({ email: ' USER@example.test ', password })).resolves.toEqual({
-      accessToken: 'signed-test-token', tokenType: 'Bearer', expiresIn: 900, user,
+      response: { accessToken: 'signed-test-token', tokenType: 'Bearer', expiresIn: 900, user },
+      refreshToken: issued,
     });
     expect(jwt.signAsync).toHaveBeenCalledWith({ sub: user.id, ver: 2 });
+    expect(refreshTokens.issue).toHaveBeenCalledWith(user.id, 2);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -152,7 +176,12 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(await stored());
       prisma.user.updateMany.mockResolvedValue({ count: 1 });
       await expect(service.changePassword(user.id, { currentPassword: password, newPassword }))
-        .resolves.toMatchObject({ accessToken: 'signed-test-token', user });
+        .resolves.toEqual({
+          response: expect.objectContaining({ accessToken: 'signed-test-token', user }),
+          refreshToken: { token: issued.token, expiresAt: issued.expiresAt },
+        });
+      expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith(user.id, prisma);
+      expect(refreshTokens.issue).toHaveBeenCalledWith(user.id, 3, undefined, prisma);
       const call = prisma.user.updateMany.mock.calls[0]?.[0] as {
         where: object; data: { passwordHash: string; sessionVersion: object };
       };
@@ -177,14 +206,33 @@ describe('AuthService', () => {
       await expect(service.changePassword(user.id, { currentPassword: password, newPassword }))
         .rejects.toMatchObject({ status: 409 });
       expect(jwt.signAsync).not.toHaveBeenCalled();
+      expect(refreshTokens.revokeAllForUser).not.toHaveBeenCalled();
     });
   });
 
-  it('revokes every session by incrementing the session version', async () => {
+  it('revokes every session by incrementing the session version and revoking refresh tokens', async () => {
     prisma.user.update.mockResolvedValue({ id: user.id });
     await service.revokeSessions(user.id);
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id }, data: { sessionVersion: { increment: 1 } }, select: { id: true },
     });
+    expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith(user.id, prisma);
+  });
+
+  it('refreshes by rotating the token and signing the stored session version', async () => {
+    refreshTokens.rotate.mockResolvedValue({ user, sessionVersion: 4, refreshToken: issued });
+    await expect(service.refresh('old-token')).resolves.toEqual({
+      response: { accessToken: 'signed-test-token', tokenType: 'Bearer', expiresIn: 900, user },
+      refreshToken: issued,
+    });
+    expect(refreshTokens.rotate).toHaveBeenCalledWith('old-token');
+    expect(jwt.signAsync).toHaveBeenCalledWith({ sub: user.id, ver: 4 });
+  });
+
+  it('logs out by revoking the refresh session and ignores a missing cookie', async () => {
+    await service.logout(undefined);
+    expect(refreshTokens.revokeFamilyOf).not.toHaveBeenCalled();
+    await service.logout('token');
+    expect(refreshTokens.revokeFamilyOf).toHaveBeenCalledWith('token');
   });
 });

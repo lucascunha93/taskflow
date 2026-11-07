@@ -25,7 +25,9 @@ async function bootstrap() {
     app.enableCors({
       origin: origins,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      allowedHeaders: ['Authorization', 'Content-Type'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-TaskFlow-Request'],
+      // Necessário para o cookie de refresh entre origens do mesmo site.
+      credentials: true,
       maxAge: 600,
     });
   }

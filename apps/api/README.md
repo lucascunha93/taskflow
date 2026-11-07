@@ -17,6 +17,9 @@ não existir. Preencha valores próprios:
 | `PORT` | Porta HTTP; padrão `3000`. |
 | `CORS_ORIGINS` | Opcional. Origens exatas permitidas, separadas por vírgula (ex.: `https://app.example.com`). Sem valor, o CORS fica desabilitado. |
 | `TRUST_PROXY` | Opcional. Número de proxies reversos confiáveis (0 a 10), para que o rate limiting use o IP real do cliente. |
+| `REFRESH_TOKEN_TTL_DAYS` | Opcional. Validade do refresh token, de 1 a 90 dias; padrão `7`. Renovada a cada uso. |
+| `REFRESH_COOKIE_SECURE` | Opcional. `true` (padrão) ou `false`. Use `false` somente em desenvolvimento HTTP quando o navegador recusar cookies `Secure` em `localhost`. |
+| `REFRESH_COOKIE_PATH` | Opcional. Caminho do cookie; padrão `/auth`. Deve corresponder ao caminho público dos endpoints de autenticação (ex.: `/api/auth`). |
 | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | Par de configuração do NestJS Observe, quando utilizado. |
 
 As variáveis são validadas na inicialização (`src/config/environment.ts`): um
@@ -136,6 +139,7 @@ de produção.
 | POST | `/auth/register` | Não |
 | POST | `/auth/login` | Não |
 | GET, PATCH | `/auth/me` | JWT |
+| POST | `/auth/refresh`, `/auth/logout` | Cookie de refresh + `X-TaskFlow-Request: 1` |
 | PUT | `/auth/me/password` | JWT |
 | DELETE | `/auth/me/sessions` | JWT |
 | POST, GET | `/organizations` | JWT |
@@ -144,6 +148,32 @@ de produção.
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
 | GET | `/organizations/:organizationId/tasks/summary` | JWT |
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
+
+### Refresh token
+
+O login grava o cookie `taskflow_refresh` (`HttpOnly`, `Secure`,
+`SameSite=Strict`, caminho `/auth`) com um token opaco aleatório. A API guarda
+somente o hash SHA-256 na tabela `refresh_tokens`; o corpo da resposta não
+contém o refresh token.
+
+- `POST /auth/refresh` troca o token do cookie por um novo (rotação) e devolve
+  um novo access token no mesmo formato do login. Sem cookie, com token
+  inválido, expirado ou emitido antes de uma troca de senha ou revogação, a
+  resposta é 401 e o cookie é apagado.
+- Tokens de uma mesma sessão formam uma família. Reapresentar um token já
+  trocado é tratado como reutilização: toda a família é revogada (401). Nos 10
+  segundos seguintes à troca, a resposta é 409, porque abas diferentes
+  compartilham o cookie e podem renovar ao mesmo tempo; o cliente repete a
+  chamada e o navegador já envia o cookie novo.
+- `POST /auth/logout` revoga a família do cookie e o apaga (204), mesmo com o
+  access token expirado.
+- Troca de senha e `DELETE /auth/me/sessions` revogam todos os refresh tokens
+  do usuário; a troca de senha grava um novo cookie para a sessão atual.
+- Proteção contra CSRF: além do `SameSite=Strict`, os dois endpoints exigem o
+  cabeçalho `X-TaskFlow-Request: 1` (403 sem ele). Formulários de outros sites
+  não conseguem enviá-lo, e o CORS bloqueia scripts de origens não autorizadas.
+- Tokens expirados de um usuário são removidos quando ele inicia uma nova
+  sessão; os revogados são mantidos até expirar, para detectar reutilização.
 
 ### Sessões, senha e bloqueio de login
 
@@ -288,8 +318,10 @@ inexistente na organização retorna 404; versão desatualizada retorna 409.
 
 - **Helmet** adiciona cabeçalhos de segurança padrão e remove `X-Powered-By`.
 - **CORS** é opt-in por `CORS_ORIGINS`, com origens exatas, métodos
-  `GET, POST, PUT, PATCH, DELETE` e cabeçalhos `Authorization` e
-  `Content-Type`. Não há cookies: a autenticação usa Bearer token.
+  `GET, POST, PUT, PATCH, DELETE`, cabeçalhos `Authorization`, `Content-Type`
+  e `X-TaskFlow-Request` e credenciais habilitadas, para o cookie de refresh.
+  Por ser `SameSite=Strict`, o cookie só é enviado entre origens do mesmo site
+  (por exemplo, `app.example.com` e `api.example.com`).
 - **Rate limiting** (`@nestjs/throttler`): `POST /auth/login` e
   `POST /auth/register` aceitam 10 requisições por minuto por IP e rota; o
   excedente recebe 429. A contagem fica em memória, então cada instância conta
@@ -300,6 +332,6 @@ inexistente na organização retorna 404; versão desatualizada retorna 409.
 O Observe é configurado em `AppModule` e fica habilitado somente quando
 `OBSERVE_APP_KEY` e `OBSERVE_APP_SECRET` estão definidas; sem elas, não grava
 nem envia telemetria. Definir apenas uma das duas impede a inicialização.
-Revise a política de telemetria antes de habilitá-lo. Renovação de sessão
-(refresh token), cookies `HttpOnly` e a configuração de produção ainda precisam
-ser avaliadas.
+Revise a política de telemetria antes de habilitá-lo. A configuração de
+produção (HTTPS, proxy reverso, CSP no servidor do frontend) ainda precisa ser
+avaliada.

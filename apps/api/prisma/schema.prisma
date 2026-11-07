@@ -33,23 +33,44 @@ model Organization {
 }
 
 model User {
-  id                  String       @id @default(uuid()) @db.Uuid
-  name                String       @db.VarChar(120)
-  email               String       @unique @db.VarChar(254)
-  passwordHash        String       @db.VarChar(255)
+  id                  String         @id @default(uuid()) @db.Uuid
+  name                String         @db.VarChar(120)
+  email               String         @unique @db.VarChar(254)
+  passwordHash        String         @db.VarChar(255)
   /// Incrementada para invalidar todos os JWTs já emitidos (troca de senha ou encerramento de sessões).
-  sessionVersion      Int          @default(0)
+  sessionVersion      Int            @default(0)
   /// Falhas de login consecutivas desde o último sucesso ou bloqueio.
-  failedLoginAttempts Int          @default(0)
+  failedLoginAttempts Int            @default(0)
   /// Enquanto no futuro, o login da conta é recusado sem verificar a senha.
-  lockedUntil         DateTime?    @db.Timestamptz(3)
+  lockedUntil         DateTime?      @db.Timestamptz(3)
   memberships         Membership[]
-  createdTasks        Task[]       @relation("TaskCreator")
-  assignedTasks       Task[]       @relation("TaskAssignee")
-  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+  refreshTokens       RefreshToken[]
+  createdTasks        Task[]         @relation("TaskCreator")
+  assignedTasks       Task[]         @relation("TaskAssignee")
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
 
   @@map("users")
+}
+
+/// Refresh token opaco, guardado somente como hash SHA-256. Tokens de uma mesma
+/// sessão compartilham `familyId`; a reutilização de um token já trocado revoga a família.
+model RefreshToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  familyId       String    @db.Uuid
+  tokenHash      String    @unique @db.Char(64)
+  /// Versão de sessão do usuário na emissão; diferente da atual, o token é recusado.
+  sessionVersion Int
+  expiresAt      DateTime  @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  replacedById   String?   @db.Uuid
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([familyId])
+  @@map("refresh_tokens")
 }
 
 model Membership {

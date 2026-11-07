@@ -17,6 +17,7 @@ import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { IssuedRefreshToken, RefreshTokensService } from './refresh-tokens.service.js';
 
 /** Falhas consecutivas que bloqueiam temporariamente o login da conta. */
 export const MAX_FAILED_LOGINS = 5;
@@ -25,11 +26,25 @@ export const LOGIN_LOCK_MS = 15 * 60_000;
 
 const ACCESS_TOKEN_TTL_SECONDS = 900;
 
+export interface TokenResponse {
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+  user: { id: string; name: string; email: string };
+}
+
+/** Resposta pública (corpo) e refresh token, que o controller grava em cookie. */
+export interface AuthSession {
+  response: TokenResponse;
+  refreshToken: IssuedRefreshToken;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly refreshTokens: RefreshTokensService,
   ) { }
 
   async register(dto: RegisterDto) {
@@ -79,7 +94,7 @@ export class AuthService {
   }
 
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto): Promise<AuthSession> {
     const email = dto.email.trim().toLowerCase();
 
     const user = await this.prisma.user.findUnique({
@@ -126,7 +141,24 @@ export class AuthService {
       });
     }
 
-    return this.tokenResponse(user, user.sessionVersion);
+    return {
+      response: await this.tokenResponse(user, user.sessionVersion),
+      refreshToken: await this.refreshTokens.issue(user.id, user.sessionVersion),
+    };
+  }
+
+  /** Renova a sessão a partir do refresh token, emitindo novo access token e novo refresh token. */
+  async refresh(token: string): Promise<AuthSession> {
+    const rotated = await this.refreshTokens.rotate(token);
+    return {
+      response: await this.tokenResponse(rotated.user, rotated.sessionVersion),
+      refreshToken: rotated.refreshToken,
+    };
+  }
+
+  /** Encerra a sessão do refresh token informado; o access token expira sozinho. */
+  async logout(token: string | undefined): Promise<void> {
+    if (token) await this.refreshTokens.revokeFamilyOf(token);
   }
 
   async getProfile(userId: string) {
@@ -154,7 +186,7 @@ export class AuthService {
    * invalidando todos os tokens anteriores; a resposta traz um novo token
    * para a sessão que fez a alteração.
    */
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<AuthSession> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true, passwordHash: true, sessionVersion: true },
@@ -177,31 +209,41 @@ export class AuthService {
       type: argon2.argon2id,
     });
 
-    // Condicionado à versão lida: uma troca ou revogação concorrente gera conflito.
-    const updated = await this.prisma.user.updateMany({
-      where: { id: user.id, sessionVersion: user.sessionVersion },
-      data: {
-        passwordHash,
-        sessionVersion: { increment: 1 },
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-      },
+    const nextVersion = user.sessionVersion + 1;
+    const refreshToken = await this.prisma.$transaction(async (tx) => {
+      // Condicionado à versão lida: uma troca ou revogação concorrente gera conflito.
+      const updated = await tx.user.updateMany({
+        where: { id: user.id, sessionVersion: user.sessionVersion },
+        data: {
+          passwordHash,
+          sessionVersion: { increment: 1 },
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new ConflictException('A sessão foi alterada por outra operação. Entre novamente.');
+      }
+
+      await this.refreshTokens.revokeAllForUser(user.id, tx);
+      const issued = await this.refreshTokens.issue(user.id, nextVersion, undefined, tx);
+      return { token: issued.token, expiresAt: issued.expiresAt };
     });
 
-    if (updated.count !== 1) {
-      throw new ConflictException('A sessão foi alterada por outra operação. Entre novamente.');
-    }
-
-    return this.tokenResponse(user, user.sessionVersion + 1);
+    return { response: await this.tokenResponse(user, nextVersion), refreshToken };
   }
 
   /** Invalida todos os tokens emitidos para o usuário, inclusive o atual. */
   async revokeSessions(userId: string): Promise<void> {
     try {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { sessionVersion: { increment: 1 } },
-        select: { id: true },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { sessionVersion: { increment: 1 } },
+          select: { id: true },
+        });
+        await this.refreshTokens.revokeAllForUser(userId, tx);
       });
     } catch (error: unknown) {
       if (
@@ -240,7 +282,7 @@ export class AuthService {
   private async tokenResponse(
     user: { id: string; name: string; email: string },
     sessionVersion: number,
-  ) {
+  ): Promise<TokenResponse> {
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       ver: sessionVersion,

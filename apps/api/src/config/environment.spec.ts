@@ -13,6 +13,15 @@ describe('validateEnvironment', () => {
     })).not.toThrow();
   });
 
+  it('validates the refresh cookie settings', () => {
+    expect(() => validateEnvironment({
+      ...valid, REFRESH_TOKEN_TTL_DAYS: '14', REFRESH_COOKIE_SECURE: 'false', REFRESH_COOKIE_PATH: '/api/auth',
+    })).not.toThrow();
+    expect(() => validateEnvironment({ ...valid, REFRESH_TOKEN_TTL_DAYS: '0' })).toThrow(/REFRESH_TOKEN_TTL_DAYS/);
+    expect(() => validateEnvironment({ ...valid, REFRESH_COOKIE_SECURE: 'yes' })).toThrow(/REFRESH_COOKIE_SECURE/);
+    expect(() => validateEnvironment({ ...valid, REFRESH_COOKIE_PATH: 'auth' })).toThrow(/REFRESH_COOKIE_PATH/);
+  });
+
   it('requires the Observe credentials as a pair', () => {
     expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key' })).toThrow(/OBSERVE_APP_KEY/);
     expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key', OBSERVE_APP_SECRET: 'secret' })).not.toThrow();

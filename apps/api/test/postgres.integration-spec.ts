@@ -8,6 +8,8 @@ import * as argon2 from 'argon2';
 import request from 'supertest';
 import { AuthModule } from '../src/auth/auth.module.js';
 import { MAX_FAILED_LOGINS } from '../src/auth/auth.service.js';
+import { REFRESH_COOKIE } from '../src/auth/refresh-cookie.js';
+import { REFRESH_REUSE_GRACE_MS } from '../src/auth/refresh-tokens.service.js';
 import { OrganizationsModule } from '../src/organizations/organizations.module.js';
 import { OrganizationsService } from '../src/organizations/organizations.service.js';
 import { PrismaModule } from '../src/prisma/prisma.module.js';
@@ -36,6 +38,17 @@ describe('HTTP integration with isolated PostgreSQL', () => {
   let taskB: string;
 
   const auth = (user: TestUser) => `Bearer ${user.token}`;
+  const refreshHeader = { 'X-TaskFlow-Request': '1' };
+  const refreshCookie = (response: request.Response): string => {
+    const value = ([] as string[]).concat(response.headers['set-cookie'] ?? [])
+      .find((item) => item.startsWith(`${REFRESH_COOKIE}=`));
+    if (!value) throw new Error('Refresh cookie not set');
+    return value.split(';')[0];
+  };
+  const loginWithCookie = async (email: string, secret = password) =>
+    refreshCookie(await request(app.getHttpServer()).post('/auth/login').send({ email, password: secret }).expect(201));
+  const refresh = (cookie: string) =>
+    request(app.getHttpServer()).post('/auth/refresh').set(refreshHeader).set('Cookie', cookie);
   const path = (org: string) => `/organizations/${org}/tasks`;
 
   async function register(label: string): Promise<TestUser> {
@@ -104,6 +117,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     try {
       if (prisma) {
         if (organizationIds.length) await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
+        // Refresh tokens são removidos em cascata com os usuários.
         if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
       }
     } finally {
@@ -214,6 +228,49 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     await request(app.getHttpServer()).get('/organizations')
       .set('Authorization', `Bearer ${second.body.accessToken}`).expect(401);
     await request(app.getHttpServer()).get('/auth/me').set('Authorization', auth(owner)).expect(200);
+  });
+
+  it('rotates refresh tokens, tolerates a concurrent refresh and revokes the family on reuse', async () => {
+    const holder = await register('refresh');
+    const first = await loginWithCookie(holder.email);
+    const stored = await prisma.refreshToken.findMany({ where: { userId: holder.id } });
+    expect(stored.every((item) => item.tokenHash.length === 64 && !first.includes(item.tokenHash))).toBe(true);
+
+    const rotated = await refresh(first).expect(200);
+    const second = refreshCookie(rotated);
+    expect(second).not.toBe(first);
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', `Bearer ${rotated.body.accessToken}`).expect(200);
+    await refresh(first).expect(409);
+
+    await prisma.refreshToken.updateMany({
+      where: { userId: holder.id, revokedAt: { not: null } },
+      data: { revokedAt: new Date(Date.now() - REFRESH_REUSE_GRACE_MS - 1000) },
+    });
+    await refresh(first).expect(401);
+    await refresh(second).expect(401);
+    const other = await loginWithCookie(holder.email);
+    await refresh(other).expect(200);
+  });
+
+  it('invalidates refresh tokens on logout, password change and session revocation', async () => {
+    const holder = await register('refresh-revocation');
+    const loggedOut = await loginWithCookie(holder.email);
+    await request(app.getHttpServer()).post('/auth/logout').set(refreshHeader).set('Cookie', loggedOut).expect(204);
+    await refresh(loggedOut).expect(401);
+
+    const beforeChange = await loginWithCookie(holder.email);
+    const newPassword = `refresh-${randomUUID()}`;
+    const changed = await request(app.getHttpServer()).put('/auth/me/password').set('Authorization', auth(holder))
+      .send({ currentPassword: password, newPassword }).expect(200);
+    await refresh(beforeChange).expect(401);
+    const afterChange = refreshCookie(changed);
+    const renewed = await refresh(afterChange).expect(200);
+
+    await request(app.getHttpServer()).delete('/auth/me/sessions')
+      .set('Authorization', `Bearer ${renewed.body.accessToken}`).expect(204);
+    await refresh(refreshCookie(renewed)).expect(401);
+    const withoutHeader = await loginWithCookie(holder.email, newPassword);
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', withoutHeader).expect(403);
   });
 
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {

@@ -7,6 +7,9 @@ import request from 'supertest';
 import { AuthController } from '../auth/auth.controller.js';
 import { AuthService } from '../auth/auth.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { ConfigService } from '@nestjs/config';
+import { REFRESH_COOKIE, RefreshCookieService, RefreshRequestGuard } from '../auth/refresh-cookie.js';
+import { RefreshTokensService } from '../auth/refresh-tokens.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksController } from '../tasks/tasks.controller.js';
 import { TasksService } from '../tasks/tasks.service.js';
@@ -18,9 +21,17 @@ describe('Authenticated HTTP endpoints', () => {
   const userId = '22222222-2222-4222-8222-222222222222';
   let app: INestApplication;
   let token: string;
+  let refreshTokens: {
+    issue: ReturnType<typeof vi.fn>;
+    rotate: ReturnType<typeof vi.fn>;
+    revokeFamilyOf: ReturnType<typeof vi.fn>;
+    revokeAllForUser: ReturnType<typeof vi.fn>;
+  };
+  const refreshExpiry = new Date('2030-01-01T00:00:00Z');
   let prisma: {
     membership: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
     organization: { update: ReturnType<typeof vi.fn> };
+    $transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
     task: { create: ReturnType<typeof vi.fn> };
     user: {
       findUnique: ReturnType<typeof vi.fn>;
@@ -30,9 +41,16 @@ describe('Authenticated HTTP endpoints', () => {
   };
 
   beforeEach(async () => {
+    refreshTokens = {
+      issue: vi.fn().mockResolvedValue({ id: 'r1', token: 'issued-refresh', expiresAt: refreshExpiry }),
+      rotate: vi.fn(),
+      revokeFamilyOf: vi.fn().mockResolvedValue(undefined),
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+    };
     prisma = {
       membership: { findUnique: vi.fn(), findMany: vi.fn() },
       organization: { update: vi.fn() },
+      $transaction: (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
       task: { create: vi.fn() },
       // O guard JWT consulta a versão de sessão do usuário do token.
       user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }), create: vi.fn(), update: vi.fn() },
@@ -45,6 +63,9 @@ describe('Authenticated HTTP endpoints', () => {
       controllers: [AuthController, OrganizationsController, TasksController],
       providers: [
         AuthService, OrganizationsService, TasksService, JwtAuthGuard,
+        RefreshCookieService, RefreshRequestGuard,
+        { provide: ConfigService, useValue: { get: () => undefined } },
+        { provide: RefreshTokensService, useValue: refreshTokens },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -246,5 +267,67 @@ describe('Authenticated HTTP endpoints', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: userId }, data: { sessionVersion: { increment: 1 } },
     }));
+  });
+
+  describe('refresh cookie', () => {
+    const header = { 'X-TaskFlow-Request': '1' };
+    const cookie = (response: request.Response): string =>
+      ([] as string[]).concat(response.headers['set-cookie'] ?? []).find((item) => item.startsWith(`${REFRESH_COOKIE}=`)) ?? '';
+
+    it('sets an HttpOnly, Secure, SameSite=Strict cookie on login without exposing it in the body', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: userId, name: 'User', email: 'user@example.test', sessionVersion: 0, failedLoginAttempts: 0, lockedUntil: null,
+        passwordHash: await argon2.hash('valid-test-password', { type: argon2.argon2id }),
+      });
+      const response = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email: 'user@example.test', password: 'valid-test-password' }).expect(201);
+      expect(response.body.refreshToken).toBeUndefined();
+      expect(response.body.accessToken).toEqual(expect.any(String));
+      const value = cookie(response);
+      expect(value).toContain(`${REFRESH_COOKIE}=issued-refresh`);
+      expect(value).toMatch(/HttpOnly/i);
+      expect(value).toMatch(/Secure/i);
+      expect(value).toMatch(/SameSite=Strict/i);
+      expect(value).toMatch(/Path=\/auth/i);
+    });
+
+    it('requires the request header before reading the cookie', async () => {
+      await request(app.getHttpServer()).post('/auth/refresh')
+        .set('Cookie', `${REFRESH_COOKIE}=abc`).expect(403);
+      await request(app.getHttpServer()).post('/auth/logout')
+        .set('Cookie', `${REFRESH_COOKIE}=abc`).expect(403);
+      expect(refreshTokens.rotate).not.toHaveBeenCalled();
+      expect(refreshTokens.revokeFamilyOf).not.toHaveBeenCalled();
+    });
+
+    it('rotates the cookie on refresh and clears it when the session is invalid', async () => {
+      await request(app.getHttpServer()).post('/auth/refresh').set(header).expect(401);
+      refreshTokens.rotate.mockResolvedValueOnce({
+        user: { id: userId, name: 'User', email: 'user@example.test' }, sessionVersion: 0,
+        refreshToken: { token: 'rotated-refresh', expiresAt: refreshExpiry },
+      });
+      const ok = await request(app.getHttpServer()).post('/auth/refresh').set(header)
+        .set('Cookie', `other=1; ${REFRESH_COOKIE}=old-refresh`).expect(200);
+      expect(refreshTokens.rotate).toHaveBeenCalledWith('old-refresh');
+      expect(ok.body).toMatchObject({ tokenType: 'Bearer', user: { id: userId } });
+      expect(cookie(ok)).toContain(`${REFRESH_COOKIE}=rotated-refresh`);
+
+      const { UnauthorizedException, ConflictException } = await import('@nestjs/common');
+      refreshTokens.rotate.mockRejectedValueOnce(new UnauthorizedException());
+      const denied = await request(app.getHttpServer()).post('/auth/refresh').set(header)
+        .set('Cookie', `${REFRESH_COOKIE}=stale`).expect(401);
+      expect(cookie(denied)).toMatch(new RegExp(`${REFRESH_COOKIE}=;`));
+      refreshTokens.rotate.mockRejectedValueOnce(new ConflictException());
+      const concurrent = await request(app.getHttpServer()).post('/auth/refresh').set(header)
+        .set('Cookie', `${REFRESH_COOKIE}=racing`).expect(409);
+      expect(cookie(concurrent)).toBe('');
+    });
+
+    it('logs out by revoking the cookie session and clearing it', async () => {
+      const response = await request(app.getHttpServer()).post('/auth/logout').set(header)
+        .set('Cookie', `${REFRESH_COOKIE}=current`).expect(204);
+      expect(refreshTokens.revokeFamilyOf).toHaveBeenCalledWith('current');
+      expect(cookie(response)).toMatch(new RegExp(`${REFRESH_COOKIE}=;`));
+    });
   });
 });
