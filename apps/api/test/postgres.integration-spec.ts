@@ -3,9 +3,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { AuthModule } from '../src/auth/auth.module.js';
+import { MAX_FAILED_LOGINS } from '../src/auth/auth.service.js';
 import { OrganizationsModule } from '../src/organizations/organizations.module.js';
 import { OrganizationsService } from '../src/organizations/organizations.service.js';
 import { PrismaModule } from '../src/prisma/prisma.module.js';
@@ -68,7 +70,10 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     process.env.JWT_SECRET = `integration-only-${randomUUID()}-${randomUUID()}`;
     const module = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, OrganizationsModule, TasksModule],
-    }).compile();
+    })
+      // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
+      .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
+      .compile();
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
@@ -167,6 +172,48 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     const stored = await prisma.user.findUniqueOrThrow({ where: { id: candidate.id } });
     expect(stored.email).toBe(candidate.email);
     expect(stored.passwordHash).toBe(before.passwordHash);
+  });
+
+  it('locks an account after consecutive failures and resets the state after a later success', async () => {
+    const locked = await register('locked');
+    for (let attempt = 0; attempt < MAX_FAILED_LOGINS; attempt++) {
+      await request(app.getHttpServer()).post('/auth/login')
+        .send({ email: locked.email, password: 'incorrect-test-password' }).expect(401);
+    }
+    const stored = await prisma.user.findUniqueOrThrow({ where: { id: locked.id } });
+    expect(stored.lockedUntil?.getTime()).toBeGreaterThan(Date.now());
+    expect(stored.failedLoginAttempts).toBe(0);
+    await request(app.getHttpServer()).post('/auth/login').send({ email: locked.email, password }).expect(429);
+    await prisma.user.update({ where: { id: locked.id }, data: { lockedUntil: new Date(Date.now() - 1000), failedLoginAttempts: 2 } });
+    await request(app.getHttpServer()).post('/auth/login').send({ email: locked.email, password }).expect(201);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: locked.id } }))
+      .toMatchObject({ failedLoginAttempts: 0, lockedUntil: null });
+  });
+
+  it('changes the password and immediately revokes previously issued tokens', async () => {
+    const changer = await register('changer');
+    const newPassword = `changed-${randomUUID()}`;
+    await request(app.getHttpServer()).put('/auth/me/password').set('Authorization', auth(changer))
+      .send({ currentPassword: 'incorrect-test-password', newPassword }).expect(403);
+    const changed = await request(app.getHttpServer()).put('/auth/me/password').set('Authorization', auth(changer))
+      .send({ currentPassword: password, newPassword }).expect(200);
+    expect(changed.body.user).toMatchObject({ id: changer.id, email: changer.email });
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', auth(changer)).expect(401);
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', `Bearer ${changed.body.accessToken}`).expect(200);
+    await request(app.getHttpServer()).post('/auth/login').send({ email: changer.email, password }).expect(401);
+    await request(app.getHttpServer()).post('/auth/login').send({ email: changer.email, password: newPassword }).expect(201);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: changer.id } })).toMatchObject({ sessionVersion: 1 });
+  });
+
+  it('revokes every session of the user, including the one that requested it', async () => {
+    const sessions = await register('sessions');
+    const second = await request(app.getHttpServer()).post('/auth/login')
+      .send({ email: sessions.email, password }).expect(201);
+    await request(app.getHttpServer()).delete('/auth/me/sessions').set('Authorization', auth(sessions)).expect(204);
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', auth(sessions)).expect(401);
+    await request(app.getHttpServer()).get('/organizations')
+      .set('Authorization', `Bearer ${second.body.accessToken}`).expect(401);
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', auth(owner)).expect(200);
   });
 
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {

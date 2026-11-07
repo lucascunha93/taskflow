@@ -80,6 +80,7 @@ describe('Task deletion (HTTP with Prisma stub)', () => {
       .overrideProvider(PrismaService)
       .useValue({
         membership: { findUnique: findMembership },
+        user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },
         task: { findFirst, deleteMany },
       })
       .compile();

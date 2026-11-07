@@ -60,6 +60,7 @@ describe('Task summary (HTTP with Prisma stub)', () => {
         TasksService, JwtAuthGuard,
         { provide: PrismaService, useValue: {
           membership: { findUnique }, task: { groupBy, findMany },
+          user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },
           $transaction: (operations: Promise<unknown>[]) => Promise.all(operations),
         } },
       ],

@@ -98,6 +98,7 @@ describe('Task reads (HTTP with Prisma stub)', () => {
       .useValue({
         $transaction: (operations: Promise<unknown>[]) => Promise.all(operations),
         membership: { findUnique: findMembership },
+        user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },
         task: { findMany, count, findFirst },
       })
       .compile();

@@ -6,9 +6,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { PrismaService } from '../../prisma/prisma.service.js';
 
 interface JwtPayload {
   sub: string;
+  /** Versão de sessão do usuário quando o token foi emitido; ausente equivale a 0. */
+  ver?: number;
   iat?: number;
   exp?: number;
 }
@@ -19,7 +22,10 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request =
@@ -46,8 +52,22 @@ export class JwtAuthGuard implements CanActivate {
       );
     }
 
-    if (typeof payload.sub !== 'string' || !payload.sub) {
+    if (
+      typeof payload.sub !== 'string' || !payload.sub ||
+      (payload.ver !== undefined && (!Number.isInteger(payload.ver) || payload.ver < 0))
+    ) {
       throw new UnauthorizedException('Token de acesso inválido.');
+    }
+
+    // Tokens de usuários removidos ou emitidos antes de uma troca de senha ou
+    // revogação de sessões deixam de ser aceitos imediatamente.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { sessionVersion: true },
+    });
+
+    if (!user || user.sessionVersion !== (payload.ver ?? 0)) {
+      throw new UnauthorizedException('Sessão encerrada. Entre novamente.');
     }
 
     request.user = payload;

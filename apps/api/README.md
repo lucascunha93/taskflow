@@ -48,8 +48,11 @@ antes do build e dos testes. `db:migrate:status` consulta o estado do banco;
 
 Não aplique migrations a um banco existente sem revisar seu estado e impacto.
 Em particular, a migration que adiciona `passwordHash` obrigatório não
-funciona diretamente se já existirem usuários na tabela. Nenhum comando acima
-deve ser substituído por reset ou exclusão de volume para contornar falhas.
+funciona diretamente se já existirem usuários na tabela. A migration
+`add_user_session_security` apenas adiciona colunas com valores padrão
+(`sessionVersion`, `failedLoginAttempts`, `lockedUntil`) e é compatível com
+usuários existentes. Nenhum comando acima deve ser substituído por reset ou
+exclusão de volume para contornar falhas.
 
 ## Comandos
 
@@ -133,12 +136,39 @@ de produção.
 | POST | `/auth/register` | Não |
 | POST | `/auth/login` | Não |
 | GET, PATCH | `/auth/me` | JWT |
+| PUT | `/auth/me/password` | JWT |
+| DELETE | `/auth/me/sessions` | JWT |
 | POST, GET | `/organizations` | JWT |
 | PATCH | `/organizations/:organizationId` | JWT |
 | POST, GET | `/organizations/:organizationId/members` | JWT |
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
 | GET | `/organizations/:organizationId/tasks/summary` | JWT |
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
+
+### Sessões, senha e bloqueio de login
+
+O JWT carrega `ver`, a versão de sessão do usuário no momento da emissão. O
+guard consulta essa versão a cada requisição autenticada: tokens de usuários
+removidos ou com versão diferente da atual recebem 401. Tokens sem `ver`
+equivalem à versão 0, então sessões emitidas antes desta mudança continuam
+válidas até a primeira revogação.
+
+- `PUT /auth/me/password` recebe `{ currentPassword, newPassword }` (nova senha
+  com 12 a 128 caracteres). Senha atual incorreta retorna 403, e não 401, para
+  não ser confundida com sessão expirada. Repetir a senha atual retorna 400. O
+  sucesso troca o hash, incrementa a versão (revogando todos os tokens
+  anteriores) e retorna um novo token no mesmo formato do login. Uma troca ou
+  revogação concorrente retorna 409. O endpoint também tem o limite por IP.
+- `DELETE /auth/me/sessions` incrementa a versão e encerra todas as sessões do
+  usuário, inclusive a atual. Retorna 204.
+- Login: após 5 senhas incorretas consecutivas, a conta fica bloqueada por 15
+  minutos. Durante o bloqueio, o login responde 429 sem verificar a senha; um
+  login bem-sucedido zera o contador. Para e-mails inexistentes, a senha é
+  verificada contra um hash descartável, para aproximar o tempo de resposta.
+  O bloqueio só ocorre em contas existentes, o que revela a existência do
+  e-mail a quem provocar o bloqueio; isso foi aceito em troca da proteção
+  contra força bruta por conta. Um atacante também pode bloquear
+  temporariamente a conta de outra pessoa.
 
 ### Perfil e organização
 
@@ -270,6 +300,6 @@ inexistente na organização retorna 404; versão desatualizada retorna 409.
 O Observe é configurado em `AppModule` e fica habilitado somente quando
 `OBSERVE_APP_KEY` e `OBSERVE_APP_SECRET` estão definidas; sem elas, não grava
 nem envia telemetria. Definir apenas uma das duas impede a inicialização.
-Revise a política de telemetria antes de habilitá-lo. Renovação e revogação de
-sessão, proteção de brute force por conta (além do limite por IP) e a
-configuração de produção ainda precisam ser avaliadas.
+Revise a política de telemetria antes de habilitá-lo. Renovação de sessão
+(refresh token), cookies `HttpOnly` e a configuração de produção ainda precisam
+ser avaliadas.

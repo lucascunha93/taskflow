@@ -34,7 +34,8 @@ describe('Authenticated HTTP endpoints', () => {
       membership: { findUnique: vi.fn(), findMany: vi.fn() },
       organization: { update: vi.fn() },
       task: { create: vi.fn() },
-      user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+      // O guard JWT consulta a versão de sessão do usuário do token.
+      user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }), create: vi.fn(), update: vi.fn() },
     };
     const module = await Test.createTestingModule({
       imports: [
@@ -211,5 +212,39 @@ describe('Authenticated HTTP endpoints', () => {
     await request(app.getHttpServer()).get('/auth/me').set('Authorization', `Bearer ${token}`).expect((response) => {
       expect(response.status).not.toBe(429);
     });
+  });
+
+  it('rejects tokens whose session version was revoked or whose user no longer exists', async () => {
+    const current = await app.get(JwtService).signAsync({ sub: userId, ver: 1 });
+    prisma.membership.findMany.mockResolvedValue([]);
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.user.findUnique.mockResolvedValue({ sessionVersion: 1 });
+    await request(app.getHttpServer()).get(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${current}`).expect(200);
+    await request(app.getHttpServer()).get(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${token}`).expect(401);
+    prisma.user.findUnique.mockResolvedValue(null);
+    await request(app.getHttpServer()).get(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${current}`).expect(401);
+    const malformed = await app.get(JwtService).signAsync({ sub: userId, ver: 'x' });
+    prisma.user.findUnique.mockResolvedValue({ sessionVersion: 0 });
+    await request(app.getHttpServer()).get(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${malformed}`).expect(401);
+  });
+
+  it('validates password changes and exposes session revocation', async () => {
+    for (const body of [{}, { currentPassword: 'x', newPassword: 'short' }, { currentPassword: 'x', newPassword: 'long-enough-password', extra: 1 }]) {
+      await request(app.getHttpServer()).put('/auth/me/password')
+        .set('Authorization', `Bearer ${token}`).send(body).expect(400);
+    }
+    await request(app.getHttpServer()).put('/auth/me/password')
+      .send({ currentPassword: 'x', newPassword: 'long-enough-password' }).expect(401);
+    prisma.user.update.mockResolvedValue({ id: userId });
+    await request(app.getHttpServer()).delete('/auth/me/sessions').expect(401);
+    await request(app.getHttpServer()).delete('/auth/me/sessions')
+      .set('Authorization', `Bearer ${token}`).expect(204);
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: userId }, data: { sessionVersion: { increment: 1 } },
+    }));
   });
 });

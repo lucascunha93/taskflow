@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -34,15 +33,21 @@ model Organization {
 }
 
 model User {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String       @db.VarChar(120)
-  email       String       @unique @db.VarChar(254)
-  passwordHash String      @db.VarChar(255)
-  memberships Membership[]
-  createdTasks Task[]      @relation("TaskCreator")
-  assignedTasks Task[]     @relation("TaskAssignee")
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  id                  String       @id @default(uuid()) @db.Uuid
+  name                String       @db.VarChar(120)
+  email               String       @unique @db.VarChar(254)
+  passwordHash        String       @db.VarChar(255)
+  /// Incrementada para invalidar todos os JWTs já emitidos (troca de senha ou encerramento de sessões).
+  sessionVersion      Int          @default(0)
+  /// Falhas de login consecutivas desde o último sucesso ou bloqueio.
+  failedLoginAttempts Int          @default(0)
+  /// Enquanto no futuro, o login da conta é recusado sem verificar a senha.
+  lockedUntil         DateTime?    @db.Timestamptz(3)
+  memberships         Membership[]
+  createdTasks        Task[]       @relation("TaskCreator")
+  assignedTasks       Task[]       @relation("TaskAssignee")
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
 
   @@map("users")
 }
@@ -62,20 +67,20 @@ model Membership {
 }
 
 model Task {
-  id              String       @id @default(uuid()) @db.Uuid
-  organizationId  String       @db.Uuid
-  title           String       @db.VarChar(200)
-  description     String?      @db.Text
-  status          TaskStatus   @default(TODO)
-  creatorId       String       @db.Uuid
-  assigneeId      String?      @db.Uuid
-  version         Int          @default(1)
-  dueDate         DateTime?    @db.Timestamptz(3)
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator         User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  assignee        User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  title          String       @db.VarChar(200)
+  description    String?      @db.Text
+  status         TaskStatus   @default(TODO)
+  creatorId      String       @db.Uuid
+  assigneeId     String?      @db.Uuid
+  version        Int          @default(1)
+  dueDate        DateTime?    @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee       User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([organizationId, status, updatedAt])
   @@index([organizationId, assigneeId])
