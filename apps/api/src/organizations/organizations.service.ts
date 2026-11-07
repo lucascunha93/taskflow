@@ -11,6 +11,9 @@ import {
   OrganizationMemberRole,
 } from './dto/add-member.dto.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
+import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
+
+const MANAGER_ROLES = ['OWNER', 'ADMIN'] as const;
 
 
 @Injectable()
@@ -86,6 +89,60 @@ export class OrganizationsService {
     });
   }
 
+  /**
+   * Renomeia a organização. Somente OWNER e ADMIN podem alterar o nome;
+   * o slug é um identificador estável e não muda.
+   */
+  async update(
+    organizationId: string,
+    requesterId: string,
+    dto: UpdateOrganizationDto,
+  ) {
+    const requesterMembership = await this.prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: requesterId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!requesterMembership) {
+      throw new NotFoundException('Organização não encontrada.');
+    }
+
+    if (requesterMembership.role !== 'OWNER' && requesterMembership.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'Você não tem permissão para alterar a organização.',
+      );
+    }
+
+    try {
+      // A condição de associação é repetida na própria atualização para que
+      // a autorização e a alteração ocorram em uma única operação.
+      const organization = await this.prisma.organization.update({
+        where: {
+          id: organizationId,
+          memberships: {
+            some: { userId: requesterId, role: { in: [...MANAGER_ROLES] } },
+          },
+        },
+        data: { name: dto.name.trim() },
+        select: { id: true, name: true, slug: true, createdAt: true },
+      });
+
+      return { ...organization, role: requesterMembership.role };
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Organização não encontrada.');
+      }
+      throw error;
+    }
+  }
 
   async addMember(
     organizationId: string,

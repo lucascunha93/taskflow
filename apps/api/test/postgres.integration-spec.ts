@@ -139,6 +139,36 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       .send({ email: candidate.email, role: 'ADMIN' }).expect(403);
   });
 
+  it('renames organizations only for their managers and keeps the slug', async () => {
+    const before = await prisma.organization.findUniqueOrThrow({ where: { id: orgA } });
+    const name = `Integration A renamed ${runId}`;
+    await request(app.getHttpServer()).patch(`/organizations/${orgA}`).set('Authorization', auth(member))
+      .send({ name: 'Member rename' }).expect(403);
+    await request(app.getHttpServer()).patch(`/organizations/${orgA}`).set('Authorization', auth(other))
+      .send({ name: 'Cross tenant rename' }).expect(404);
+    await request(app.getHttpServer()).patch(`/organizations/${orgB}`).set('Authorization', auth(admin))
+      .send({ name: 'Cross tenant rename' }).expect(404);
+    const renamed = await request(app.getHttpServer()).patch(`/organizations/${orgA}`).set('Authorization', auth(admin))
+      .send({ name: ` ${name} ` }).expect(200);
+    expect(renamed.body).toMatchObject({ id: orgA, name, slug: before.slug, role: 'ADMIN' });
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: orgB } }))
+      .toMatchObject({ name: expect.stringContaining('Integration B') });
+  });
+
+  it('updates only the profile name of the authenticated user', async () => {
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: candidate.id } });
+    const updated = await request(app.getHttpServer()).patch('/auth/me').set('Authorization', auth(candidate))
+      .send({ name: ' Candidate renamed ' }).expect(200);
+    expect(updated.body).toEqual({
+      id: candidate.id, name: 'Candidate renamed', email: candidate.email, createdAt: before.createdAt.toISOString(),
+    });
+    await request(app.getHttpServer()).patch('/auth/me').set('Authorization', auth(candidate))
+      .send({ name: 'Other', email: owner.email }).expect(400);
+    const stored = await prisma.user.findUniqueOrThrow({ where: { id: candidate.id } });
+    expect(stored.email).toBe(candidate.email);
+    expect(stored.passwordHash).toBe(before.passwordHash);
+  });
+
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {
     const list = await request(app.getHttpServer()).get(path(orgA)).set('Authorization', auth(owner))
       .query({ page: 1, limit: 1, sortBy: 'title', sortOrder: 'asc' }).expect(200);

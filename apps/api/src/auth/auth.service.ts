@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
 
 @Injectable()
 export class AuthService {
@@ -128,4 +129,26 @@ export class AuthService {
     return user;
   }
 
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: { name: dto.name.trim() },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
+        },
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new UnauthorizedException('Usuário não encontrado.');
+      }
+      throw error;
+    }
+  }
 }

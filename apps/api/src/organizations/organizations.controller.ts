@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -13,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { OrganizationsService } from './organizations.service.js';
 import { AddMemberDto } from './dto/add-member.dto.js';
+import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -45,6 +47,18 @@ export class OrganizationsController {
     );
   }
 
+  @Patch(':organizationId')
+  update(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: UpdateOrganizationDto,
+  ) {
+    return this.organizationsService.update(
+      organizationId,
+      request.user.sub,
+      dto,
+    );
+  }
 
   @Post(':organizationId/members')
   addMember(

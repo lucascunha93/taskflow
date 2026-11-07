@@ -12,7 +12,11 @@ describe('OrganizationsService', () => {
   let service: OrganizationsService;
   let transactionMembershipCreate: ReturnType<typeof vi.fn>;
   let prisma: {
-    organization: { create: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
+    organization: {
+      create: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
     membership: {
       create: ReturnType<typeof vi.fn>;
       findUnique: ReturnType<typeof vi.fn>;
@@ -33,7 +37,7 @@ describe('OrganizationsService', () => {
     };
     transactionMembershipCreate = tx.membership.create;
     prisma = {
-      organization: { create: vi.fn(), findMany: vi.fn() },
+      organization: { create: vi.fn(), findMany: vi.fn(), update: vi.fn() },
       membership: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
       user: { findUnique: vi.fn() },
       $transaction: vi.fn((callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
@@ -135,5 +139,43 @@ describe('OrganizationsService', () => {
     expect(prisma.membership.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { organizationId },
     }));
+  });
+
+  describe('update', () => {
+    const organization = { id: organizationId, name: 'Novo nome', slug: 'slug-a', createdAt: new Date() };
+
+    it.each(['OWNER', 'ADMIN'] as const)('lets an %s rename the organization in one conditional write', async (role) => {
+      prisma.membership.findUnique.mockResolvedValue({ role });
+      prisma.organization.update.mockResolvedValue(organization);
+      await expect(service.update(organizationId, requesterId, { name: ' Novo nome ' }))
+        .resolves.toEqual({ ...organization, role });
+      expect(prisma.organization.update).toHaveBeenCalledWith({
+        where: {
+          id: organizationId,
+          memberships: { some: { userId: requesterId, role: { in: ['OWNER', 'ADMIN'] } } },
+        },
+        data: { name: 'Novo nome' },
+        select: { id: true, name: true, slug: true, createdAt: true },
+      });
+    });
+
+    it('returns 404 for a non-member and 403 for a MEMBER without writing', async () => {
+      prisma.membership.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ role: 'MEMBER' });
+      await expect(service.update(organizationId, requesterId, { name: 'Nome' }))
+        .rejects.toMatchObject({ status: 404 });
+      await expect(service.update(organizationId, requesterId, { name: 'Nome' }))
+        .rejects.toMatchObject({ status: 403 });
+      expect(prisma.organization.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the membership disappears before the conditional write', async () => {
+      prisma.membership.findUnique.mockResolvedValue({ role: 'OWNER' });
+      prisma.organization.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('missing', {
+        code: 'P2025',
+        clientVersion: 'test',
+      }));
+      await expect(service.update(organizationId, requesterId, { name: 'Nome' }))
+        .rejects.toMatchObject({ status: 404 });
+    });
   });
 });

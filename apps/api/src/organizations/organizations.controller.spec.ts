@@ -19,15 +19,21 @@ describe('Authenticated HTTP endpoints', () => {
   let token: string;
   let prisma: {
     membership: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
+    organization: { update: ReturnType<typeof vi.fn> };
     task: { create: ReturnType<typeof vi.fn> };
-    user: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+    user: {
+      findUnique: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(async () => {
     prisma = {
       membership: { findUnique: vi.fn(), findMany: vi.fn() },
+      organization: { update: vi.fn() },
       task: { create: vi.fn() },
-      user: { findUnique: vi.fn(), create: vi.fn() },
+      user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     };
     const module = await Test.createTestingModule({
       imports: [JwtModule.register({ secret: 'test-only-signing-key-not-used-in-production' })],
@@ -150,4 +156,43 @@ describe('Authenticated HTTP endpoints', () => {
     }
     expect(prisma.task.create).toHaveBeenCalledTimes(1);
   });
+
+  it('updates the profile name of the JWT subject and rejects other fields', async () => {
+    prisma.user.update.mockResolvedValue({ id: userId, name: 'Novo Nome', email: 'a@example.test', createdAt: new Date() });
+    await request(app.getHttpServer()).patch('/auth/me').send({ name: 'Novo Nome' }).expect(401);
+    await request(app.getHttpServer()).patch('/auth/me')
+      .set('Authorization', `Bearer ${token}`).send({ name: ' Novo Nome ' }).expect(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: userId }, data: { name: 'Novo Nome' },
+    }));
+    for (const body of [{ name: ' a ' }, { name: 'Nome', email: 'b@example.test' }, {}]) {
+      await request(app.getHttpServer()).patch('/auth/me')
+        .set('Authorization', `Bearer ${token}`).send(body).expect(400);
+    }
+    expect(prisma.user.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('renames an organization only for managers and validates the request', async () => {
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}`).send({ name: 'Equipe' }).expect(401);
+    await request(app.getHttpServer()).patch('/organizations/not-a-uuid')
+      .set('Authorization', `Bearer ${token}`).send({ name: 'Equipe' }).expect(400);
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}`)
+      .set('Authorization', `Bearer ${token}`).send({ name: 'Equipe', slug: 'outro' }).expect(400);
+    expect(prisma.membership.findUnique).not.toHaveBeenCalled();
+
+    prisma.membership.findUnique.mockResolvedValueOnce({ role: 'MEMBER' });
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}`)
+      .set('Authorization', `Bearer ${token}`).send({ name: 'Equipe' }).expect(403);
+    prisma.membership.findUnique.mockResolvedValueOnce(null);
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}`)
+      .set('Authorization', `Bearer ${token}`).send({ name: 'Equipe' }).expect(404);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+
+    prisma.membership.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
+    prisma.organization.update.mockResolvedValue({ id: orgId, name: 'Equipe', slug: 'equipe', createdAt: new Date() });
+    const response = await request(app.getHttpServer()).patch(`/organizations/${orgId}`)
+      .set('Authorization', `Bearer ${token}`).send({ name: ' Equipe ' }).expect(200);
+    expect(response.body).toMatchObject({ id: orgId, name: 'Equipe', slug: 'equipe', role: 'ADMIN' });
+  });
+
 });

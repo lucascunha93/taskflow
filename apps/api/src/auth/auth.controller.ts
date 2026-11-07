@@ -4,6 +4,7 @@ import {
     Get,
     HttpCode,
     HttpStatus,
+    Patch,
     Post,
     Req,
     UseGuards,
@@ -11,6 +12,7 @@ import {
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import type { Request } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 
@@ -39,6 +41,12 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     getMe(@Req() request: AuthenticatedRequest) {
         return this.authService.getProfile(request.user.sub);
+    }
+
+    @Patch('me')
+    @UseGuards(JwtAuthGuard)
+    updateMe(@Req() request: AuthenticatedRequest, @Body() dto: UpdateProfileDto) {
+        return this.authService.updateProfile(request.user.sub, dto);
     }
 }
 

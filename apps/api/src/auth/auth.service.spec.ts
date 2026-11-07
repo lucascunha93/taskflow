@@ -7,13 +7,19 @@ import { AuthService } from './auth.service.js';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: { user: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> } };
+  let prisma: {
+    user: {
+      findUnique: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+  };
   let jwt: { signAsync: ReturnType<typeof vi.fn> };
   const password = 'valid-test-password';
   const user = { id: 'user', name: 'User', email: 'user@example.test' };
 
   beforeEach(async () => {
-    prisma = { user: { findUnique: vi.fn(), create: vi.fn() } };
+    prisma = { user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() } };
     jwt = { signAsync: vi.fn().mockResolvedValue('signed-test-token') };
     const module = await Test.createTestingModule({
       providers: [
@@ -77,5 +83,24 @@ describe('AuthService', () => {
   it('rejects profile lookup when the user no longer exists', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(service.getProfile(user.id)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('updates only the trimmed name of the authenticated user without exposing the hash', async () => {
+    const updated = { ...user, name: 'Novo Nome', createdAt: new Date() };
+    prisma.user.update.mockResolvedValue(updated);
+    await expect(service.updateProfile(user.id, { name: ' Novo Nome ' })).resolves.toEqual(updated);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { name: 'Novo Nome' },
+      select: { id: true, name: true, email: true, createdAt: true },
+    });
+  });
+
+  it('rejects a profile update when the user no longer exists', async () => {
+    prisma.user.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('missing', {
+      code: 'P2025',
+      clientVersion: 'test',
+    }));
+    await expect(service.updateProfile(user.id, { name: 'Nome' })).rejects.toMatchObject({ status: 401 });
   });
 });
