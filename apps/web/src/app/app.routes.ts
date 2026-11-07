@@ -14,6 +14,8 @@ export const routes: Routes = [
       { path: 'organizations/new', loadComponent: () => import('./features/organizations/create-organization.component').then((m) => m.CreateOrganizationComponent) },
       { path: 'members', loadComponent: () => import('./features/members/members-page.component').then((m) => m.MembersPageComponent) },
       { path: 'tasks', loadComponent: () => import('./features/tasks/tasks-page.component').then((m) => m.TasksPageComponent) },
+      { path: 'settings', loadComponent: () => import('./features/organizations/organization-settings.component').then((m) => m.OrganizationSettingsComponent) },
+      { path: 'profile', loadComponent: () => import('./features/profile/profile-page.component').then((m) => m.ProfilePageComponent) },
     ],
   },
   { path: '**', redirectTo: '' },

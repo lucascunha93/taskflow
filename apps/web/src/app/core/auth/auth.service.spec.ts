@@ -208,4 +208,28 @@ describe('AuthService and interceptor', () => {
     expect(auth.status()).toBe('authenticated');
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  it('updates the authenticated profile name with the bearer token', async () => {
+    await login();
+    const result = firstValueFrom(auth.updateProfile('Novo Nome'));
+    const request = http.expectOne('/api/auth/me');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`);
+    expect(request.request.body).toEqual({ name: 'Novo Nome' });
+    request.flush({ ...user, name: 'Novo Nome' });
+    await expect(result).resolves.toMatchObject({ name: 'Novo Nome' });
+    expect(auth.user()?.name).toBe('Novo Nome');
+  });
+
+  it('does not update the profile without a session or after the session changes', async () => {
+    await expect(firstValueFrom(auth.updateProfile('Nome'))).rejects.toThrow();
+    http.expectNone('/api/auth/me');
+    await login();
+    const result = firstValueFrom(auth.updateProfile('Nome'));
+    const request = http.expectOne('/api/auth/me');
+    auth.logout();
+    request.flush({ ...user, name: 'Nome' });
+    await expect(result).rejects.toThrow();
+    expect(auth.user()).toBeNull();
+  });
 });

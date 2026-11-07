@@ -1,0 +1,55 @@
+<section class="page">
+  <p class="eyebrow">CONTA</p>
+  <h1>Meu perfil</h1>
+  @if (auth.user(); as user) {
+    <p class="description">Seus dados de acesso ao TaskFlow.</p>
+
+    <section class="profile-section" aria-labelledby="account-title">
+      <h2 id="account-title">Conta</h2>
+      <dl class="details">
+        <div><dt>E-mail</dt><dd>{{ user.email }}</dd></div>
+        <div><dt>Cadastro</dt><dd>{{ user.createdAt | date: 'dd/MM/yyyy' }}</dd></div>
+      </dl>
+      <p class="hint">O e-mail identifica sua conta e não pode ser alterado por aqui.</p>
+    </section>
+
+    <section class="profile-section" aria-labelledby="name-title">
+      <h2 id="name-title">Nome de exibição</h2>
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="saving()">
+        @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+        @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+        <label for="profile-name">Nome</label>
+        <input id="profile-name" class="tf-field" type="text" formControlName="name" autocomplete="name"
+          [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+          [attr.aria-describedby]="form.controls.name.touched && form.controls.name.invalid ? 'profile-name-error' : 'profile-name-hint'" />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <p id="profile-name-error" class="field-error">Informe um nome com 2 a 120 caracteres.</p>
+        } @else {
+          <p id="profile-name-hint" class="hint">É assim que as outras pessoas das suas organizações veem você.</p>
+        }
+        <button type="submit" class="tf-button" [disabled]="saving()">{{ saving() ? 'Salvando…' : 'Salvar nome' }}</button>
+      </form>
+    </section>
+
+    <section class="profile-section" aria-labelledby="organizations-title">
+      <h2 id="organizations-title">Organizações</h2>
+      @if (organizations.status() === 'ready') {
+        @if (organizations.organizations().length === 0) {
+          <p class="hint">Você ainda não participa de nenhuma organização.</p>
+          <a class="text-link" routerLink="/organizations/new">Criar organização</a>
+        } @else {
+          <ul class="organization-roles">
+            @for (organization of organizations.organizations(); track organization.id) {
+              <li><span>{{ organization.name }}</span><span class="tf-badge">{{ roleLabels[organization.role] }}</span></li>
+            }
+          </ul>
+        }
+      } @else if (organizations.status() === 'error') {
+        <p class="message" role="alert">Não foi possível carregar suas organizações.</p>
+        <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+      } @else {
+        <p role="status">Carregando organizações…</p>
+      }
+    </section>
+  }
+</section>

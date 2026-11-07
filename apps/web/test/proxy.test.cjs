@@ -14,9 +14,13 @@ test('proxies organization API routes but not the Angular creation page', () => 
     '/organizations/invalid-id/tasks?page=1',
     '/organizations/invalid-id/tasks/summary',
     '/organizations/invalid-id/tasks/task-id?version=1',
+    '/organizations/11111111-1111-4111-8111-111111111111',
   ]) assert.equal(proxied(path), true, path);
 
-  for (const path of ['/organizations/new', '/organizations/new?source=home', '/organizations/new/']) {
+  for (const path of [
+    '/organizations/new', '/organizations/new?source=home', '/organizations/new/',
+    '/organizations/11111111-1111-4111-8111-111111111111/other',
+  ]) {
     assert.equal(proxied(path), false, path);
   }
 });

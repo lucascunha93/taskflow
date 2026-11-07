@@ -34,10 +34,11 @@
   <p class="nav-label nav-label--secondary">ORGANIZAÇÃO</p>
   <ul>
     <li>
-      <button type="button" class="nav-item" disabled title="Disponível em uma próxima etapa">
+      <a class="nav-item" routerLink="/settings" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
+        (click)="navigated.emit()">
         <app-icon name="settings" />
         <span>Configurações</span>
-      </button>
+      </a>
     </li>
   </ul>
 </nav>

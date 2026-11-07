@@ -36,12 +36,10 @@ describe('MainLayoutComponent', () => {
     expect(element.textContent).toContain('prévia do layout');
     expect(element.querySelector<HTMLAnchorElement>('.skip-link')?.getAttribute('href')).toBe('#main-content');
     const navButtons = element.querySelectorAll<HTMLButtonElement>('nav button');
-    expect(Array.from(navButtons, (button) => button.textContent?.trim())).toEqual([
-      'Minhas tarefas', 'Configurações',
-    ]);
+    expect(Array.from(navButtons, (button) => button.textContent?.trim())).toEqual(['Minhas tarefas']);
     expect(Array.from(navButtons).every((button) => button.disabled)).toBe(true);
     expect(Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a'), (link) => link.getAttribute('href')))
-      .toEqual(['/', '/tasks', '/members']);
+      .toEqual(['/', '/tasks', '/members', '/settings']);
     expect(element.querySelector<HTMLInputElement>('input[type="search"]')?.disabled).toBe(true);
   });
 

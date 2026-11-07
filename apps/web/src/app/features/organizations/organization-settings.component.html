@@ -1,0 +1,54 @@
+<section class="page">
+  <p class="eyebrow">ORGANIZAÇÃO</p>
+  <h1>Configurações</h1>
+  @if (organizations.status() === 'loading' || organizations.status() === 'idle') {
+    <p role="status">Carregando organizações…</p>
+  } @else if (organizations.status() === 'error') {
+    <p class="message" role="alert">Não foi possível carregar suas organizações.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="organizations.refresh()">Tentar novamente</button>
+  } @else if (organizations.active(); as organization) {
+    <p class="description">Dados do espaço de trabalho <strong>{{ organization.name }}</strong>.</p>
+
+    <section class="settings-section" aria-labelledby="details-title">
+      <h2 id="details-title">Detalhes</h2>
+      <dl class="details">
+        <div><dt>Identificador</dt><dd><code>{{ organization.slug }}</code></dd></div>
+        <div><dt>Criada em</dt><dd>{{ organization.createdAt | date: 'dd/MM/yyyy' }}</dd></div>
+        <div><dt>Seu papel</dt><dd>{{ roleLabels[organization.role] }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="settings-section" aria-labelledby="name-title">
+      <h2 id="name-title">Nome da organização</h2>
+      @if (canManage()) {
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="saving()">
+          @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+          @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+          <label for="organization-name">Nome</label>
+          <input id="organization-name" class="tf-field" type="text" formControlName="name" autocomplete="organization"
+            [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid"
+            [attr.aria-describedby]="form.controls.name.touched && form.controls.name.invalid ? 'organization-name-error' : 'organization-name-hint'" />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <p id="organization-name-error" class="field-error">Informe um nome com 2 a 120 caracteres.</p>
+          } @else {
+            <p id="organization-name-hint" class="hint">O identificador não muda ao renomear a organização.</p>
+          }
+          <button type="submit" class="tf-button" [disabled]="saving()">{{ saving() ? 'Salvando…' : 'Salvar nome' }}</button>
+        </form>
+      } @else {
+        <p class="hint">{{ organization.name }}</p>
+        <p class="hint">Somente proprietários e administradores podem alterar o nome da organização.</p>
+      }
+    </section>
+
+    <section class="settings-section" aria-labelledby="members-title">
+      <h2 id="members-title">Membros</h2>
+      <p class="hint">Consulte quem participa da organização{{ canManage() ? ' e adicione pessoas já cadastradas' : '' }}.</p>
+      <a class="text-link" routerLink="/members">Abrir membros</a>
+    </section>
+  } @else {
+    <p class="description">Selecione ou crie uma organização para consultar suas configurações.</p>
+    <a class="tf-button" routerLink="/">Escolher organização</a>
+  }
+  @if (organizations.warning()) { <p class="message" role="alert">{{ organizations.warning() }}</p> }
+</section>

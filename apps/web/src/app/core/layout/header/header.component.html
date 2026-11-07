@@ -23,7 +23,7 @@
       <input class="tf-field" type="search" aria-label="Busca ainda não disponível"
         placeholder="Buscar" disabled />
     </div>
-    <details class="profile-menu">
+    <details #profileMenu class="profile-menu">
       <summary class="header-profile" aria-label="Menu de perfil de {{ user().name }}">
         <span class="tf-avatar" aria-hidden="true">{{ user().name.slice(0, 1).toUpperCase() }}</span>
         <app-icon name="chevron" />
@@ -33,6 +33,7 @@
           <strong>{{ user().name }}</strong>
           <span>{{ user().email }}</span>
         </div>
+        <a class="profile-link" routerLink="/profile" (click)="profileMenu.open = false">Meu perfil</a>
         <button type="button" class="logout" (click)="logout.emit()">Sair</button>
       </div>
     </details>

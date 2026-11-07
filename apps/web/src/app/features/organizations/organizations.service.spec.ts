@@ -230,4 +230,29 @@ describe('OrganizationsService', () => {
     expect(service.status()).toBe('error');
     expect(service.active()).toBeNull();
   });
+
+  it('renames an organization and updates the list and active organization', async () => {
+    load([first, second]);
+    service.select(second.id);
+    const result = firstValueFrom(service.rename(second.id, 'Equipe Renomeada'));
+    const request = http.expectOne(`/api/organizations/${second.id}`);
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ name: 'Equipe Renomeada' });
+    request.flush({ id: second.id, name: 'Equipe Renomeada', slug: second.slug, createdAt: second.createdAt, role: 'OWNER' });
+    await expect(result).resolves.toMatchObject({ name: 'Equipe Renomeada' });
+    expect(service.active()?.name).toBe('Equipe Renomeada');
+    expect(service.organizations().map((organization) => organization.name)).toEqual(['Equipe A', 'Equipe Renomeada']);
+  });
+
+  it('does not rename unknown organizations and ignores a late rename after logout', async () => {
+    load([first]);
+    await expect(firstValueFrom(service.rename('other', 'Nome'))).rejects.toThrow();
+    http.expectNone('/api/organizations/other');
+    const result = firstValueFrom(service.rename(first.id, 'Nome Novo'));
+    const request = http.expectOne(`/api/organizations/${first.id}`);
+    auth.logout();
+    request.flush({ id: first.id, name: 'Nome Novo', slug: first.slug, createdAt: first.createdAt, role: 'MEMBER' });
+    await expect(result).rejects.toThrow();
+    expect(service.organizations()).toEqual([]);
+  });
 });

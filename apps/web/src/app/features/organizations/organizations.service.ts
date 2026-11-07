@@ -34,7 +34,7 @@ function listFromResponse(value: unknown): Organization[] {
   });
 }
 
-function createdFromResponse(value: unknown): Organization {
+function organizationFromResponse(value: unknown): Organization {
   if (typeof value !== 'object' || value === null ||
     !('id' in value) || typeof value.id !== 'string' || !value.id ||
     !('name' in value) || typeof value.name !== 'string' || !value.name ||
@@ -133,7 +133,7 @@ export class OrganizationsService {
     const sessionVersion = this.auth.getSessionVersion();
     const previousOrganizations = this.organizationsState();
     return this.http.post<unknown>(`${this.baseUrl}/organizations`, { name }).pipe(
-      map(createdFromResponse),
+      map(organizationFromResponse),
       tap((organization) => {
         if (this.auth.getSessionVersion() !== sessionVersion || this.auth.user()?.id !== user.id) {
           throw new Error('A sessão mudou durante a criação da organização.');
@@ -146,6 +146,27 @@ export class OrganizationsService {
         this.statusState.set('ready');
         this.select(organization.id);
         if (refreshInProgress) this.refresh();
+      }),
+    );
+  }
+
+  /** Renomeia uma organização; a API valida se o usuário é OWNER ou ADMIN. */
+  rename(id: string, name: string): Observable<Organization> {
+    const user = this.auth.user();
+    if (!user || this.auth.status() !== 'authenticated' || this.ownerIdState() !== user.id ||
+      !this.organizationsState().some((organization) => organization.id === id)) {
+      return throwError(() => new Error('Não é possível alterar uma organização fora da sessão atual.'));
+    }
+    const sessionVersion = this.auth.getSessionVersion();
+    return this.http.patch<unknown>(`${this.baseUrl}/organizations/${encodeURIComponent(id)}`, { name }).pipe(
+      map(organizationFromResponse),
+      tap((organization) => {
+        if (this.auth.getSessionVersion() !== sessionVersion || this.auth.user()?.id !== user.id ||
+          organization.id !== id) {
+          throw new Error('A sessão mudou durante a alteração da organização.');
+        }
+        this.organizationsState.update((organizations) =>
+          organizations.map((item) => item.id === organization.id ? organization : item));
       }),
     );
   }

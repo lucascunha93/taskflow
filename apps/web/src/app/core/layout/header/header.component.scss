@@ -90,7 +90,8 @@
   text-overflow: ellipsis;
 }
 .profile-identity span { color: var(--color-text-secondary); font-size: var(--font-size-small); }
-.logout {
+.logout,
+.profile-link {
   width: 100%;
   min-height: 44px;
   padding: 0 var(--space-2);
@@ -101,7 +102,9 @@
   text-align: left;
   cursor: pointer;
 }
-.logout:hover { background: var(--color-surface-hover); }
+.logout:hover,
+.profile-link:hover { background: var(--color-surface-hover); }
+.profile-link { display: flex; align-items: center; text-decoration: none; }
 
 .menu-toggle {
   display: none;

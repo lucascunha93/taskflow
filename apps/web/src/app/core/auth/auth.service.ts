@@ -163,6 +163,24 @@ export class AuthService {
     return request;
   }
 
+  /** Atualiza o nome do usuário autenticado e reflete o perfil retornado pela API. */
+  updateProfile(name: string): Observable<AuthUser> {
+    const generation = this.generation;
+    const userId = this.userState()?.id;
+    if (!userId || this.statusState() !== 'authenticated') {
+      return throwError(() => new Error('Não há uma sessão válida para atualizar o perfil.'));
+    }
+    return this.http.patch<unknown>(`${this.baseUrl}/auth/me`, { name }).pipe(
+      map(profileFromResponse),
+      tap((user) => {
+        if (generation !== this.generation || user.id !== userId) {
+          throw new Error('A sessão mudou durante a atualização do perfil.');
+        }
+        this.userState.set(user);
+      }),
+    );
+  }
+
   logout(): void {
     this.clearSession(false);
   }

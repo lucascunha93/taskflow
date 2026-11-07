@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, ElementRef, input, output, viewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../../shared/icon/icon.component';
 import { AuthUser } from '../../auth/auth.models';
 
 @Component({
   selector: 'app-header',
-  imports: [IconComponent],
+  imports: [IconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss',
