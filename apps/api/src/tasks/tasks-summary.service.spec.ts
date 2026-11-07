@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksService } from './tasks.service.js';
+import { ActivityService } from '../activity/activity.service.js';
 
 describe('Task summary', () => {
   const organizationId = 'organization-a';
@@ -15,7 +16,11 @@ describe('Task summary', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const module = await Test.createTestingModule({
-      providers: [TasksService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        TasksService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ActivityService, useValue: { record: vi.fn() } },
+      ],
     }).compile();
     service = module.get(TasksService);
   });

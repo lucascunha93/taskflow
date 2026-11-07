@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { MembershipRole, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { ActivityService } from '../../activity/activity.service.js';
 import { CommentBodyDto, ListCommentsQueryDto } from './dto/comment.dto.js';
 
 export const commentSelect = {
@@ -25,7 +26,10 @@ type CommentDetails = Prisma.TaskCommentGetPayload<{ select: typeof commentSelec
  */
 @Injectable()
 export class TaskCommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activity: ActivityService,
+  ) {}
 
   async list(organizationId: string, taskId: string, userId: string, query: ListCommentsQueryDto) {
     await this.assertTaskAccess(organizationId, taskId, userId);
@@ -59,10 +63,16 @@ export class TaskCommentsService {
     userId: string,
     dto: CommentBodyDto,
   ): Promise<CommentDetails> {
-    await this.assertTaskAccess(organizationId, taskId, userId);
-    return this.prisma.taskComment.create({
-      data: { organizationId, taskId, authorId: userId, body: dto.body.trim() },
-      select: commentSelect,
+    const { title } = await this.assertTaskAccess(organizationId, taskId, userId);
+    return this.prisma.$transaction(async (tx) => {
+      const comment = await tx.taskComment.create({
+        data: { organizationId, taskId, authorId: userId, body: dto.body.trim() },
+        select: commentSelect,
+      });
+      await this.activity.record(tx, {
+        organizationId, taskId, taskTitle: title, actorId: userId, type: 'COMMENT_ADDED',
+      });
+      return comment;
     });
   }
 
@@ -86,7 +96,7 @@ export class TaskCommentsService {
   }
 
   async remove(organizationId: string, taskId: string, commentId: string, userId: string): Promise<void> {
-    const role = await this.assertTaskAccess(organizationId, taskId, userId);
+    const { role } = await this.assertTaskAccess(organizationId, taskId, userId);
     const canModerate = role === 'OWNER' || role === 'ADMIN';
     const result = await this.prisma.taskComment.deleteMany({
       where: {
@@ -103,7 +113,11 @@ export class TaskCommentsService {
   }
 
   /** Valida a associação (404 para organização inacessível) e a tarefa na organização. */
-  private async assertTaskAccess(organizationId: string, taskId: string, userId: string): Promise<MembershipRole> {
+  private async assertTaskAccess(
+    organizationId: string,
+    taskId: string,
+    userId: string,
+  ): Promise<{ role: MembershipRole; title: string }> {
     const membership = await this.prisma.membership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: { role: true },
@@ -113,12 +127,12 @@ export class TaskCommentsService {
     }
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, organizationId },
-      select: { id: true },
+      select: { title: true },
     });
     if (!task) {
       throw new NotFoundException('Tarefa não encontrada.');
     }
-    return membership.role;
+    return { role: membership.role, title: task.title };
   }
 
   private async findComment(organizationId: string, taskId: string, commentId: string): Promise<void> {

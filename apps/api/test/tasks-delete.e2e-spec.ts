@@ -79,6 +79,8 @@ describe('Task deletion (HTTP with Prisma stub)', () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({
+        $transaction(callback: (tx: unknown) => Promise<unknown>) { return callback(this); },
+        taskActivity: { create: vi.fn().mockResolvedValue({}) },
         membership: { findUnique: findMembership },
         user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },
         task: { findFirst, deleteMany },

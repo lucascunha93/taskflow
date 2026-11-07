@@ -36,6 +36,9 @@
           </div>
         }
         <app-task-comments [taskId]="current.id" />
+        <div class="history">
+          <app-activity-feed [taskId]="current.id" heading="Histórico" emptyText="Nenhuma alteração registrada." />
+        </div>
       }
     }
   }

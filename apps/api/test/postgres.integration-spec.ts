@@ -316,6 +316,47 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     expect(await prisma.taskComment.count({ where: { taskId: temporary.body.id } })).toBe(0);
   });
 
+  it('records task history in the same transaction and keeps it inside the tenant', async () => {
+    const created = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title: 'History task', status: 'TODO' }).expect(201);
+    const id = created.body.id as string;
+    await request(app.getHttpServer()).put(`${path(orgA)}/${id}`).set('Authorization', auth(member))
+      .send({ version: 1, status: 'IN_PROGRESS', assigneeId: member.id }).expect(200);
+    await request(app.getHttpServer()).put(`${path(orgA)}/${id}`).set('Authorization', auth(member))
+      .send({ version: 2 }).expect(200);
+    await request(app.getHttpServer()).post(`${path(orgA)}/${id}/comments`).set('Authorization', auth(admin))
+      .send({ body: 'Comentário no histórico' }).expect(201);
+
+    const history = await request(app.getHttpServer()).get(`${path(orgA)}/${id}/activity`)
+      .set('Authorization', auth(member)).expect(200);
+    expect(history.body.data.map((item: { type: string }) => item.type)).toEqual(['COMMENT_ADDED', 'TASK_UPDATED', 'TASK_CREATED']);
+    expect(history.body.data[1]).toMatchObject({
+      actor: { id: member.id },
+      changes: [
+        { field: 'status', from: 'TODO', to: 'IN_PROGRESS' },
+        { field: 'assignee', from: null, to: 'Test member' },
+      ],
+    });
+    expect(JSON.stringify(history.body)).not.toContain('Comentário no histórico');
+
+    await request(app.getHttpServer()).get(`${path(orgA)}/${id}/activity`).set('Authorization', auth(other)).expect(404);
+    await request(app.getHttpServer()).get(`/organizations/${orgA}/activity`).set('Authorization', auth(other)).expect(404);
+    await request(app.getHttpServer()).get(`${path(orgA)}/${taskB}/activity`).set('Authorization', auth(owner)).expect(404);
+
+    await request(app.getHttpServer()).delete(`${path(orgA)}/${id}?version=3`).set('Authorization', auth(owner)).expect(204);
+    const feed = await request(app.getHttpServer()).get(`/organizations/${orgA}/activity?limit=5`)
+      .set('Authorization', auth(member)).expect(200);
+    expect(feed.body.data[0]).toMatchObject({ type: 'TASK_DELETED', taskId: null, taskTitle: 'History task', actor: { id: owner.id } });
+    expect(feed.body.data.filter((item: { taskTitle: string }) => item.taskTitle === 'History task')
+      .every((item: { taskId: string | null }) => item.taskId === null)).toBe(true);
+    const otherFeed = await request(app.getHttpServer()).get(`/organizations/${orgB}/activity`)
+      .set('Authorization', auth(other)).expect(200);
+    expect(otherFeed.body.data.some((item: { taskTitle: string }) => item.taskTitle === 'History task')).toBe(false);
+    const older = await request(app.getHttpServer()).get(`/organizations/${orgA}/activity?limit=1&before=${feed.body.data[0].id}`)
+      .set('Authorization', auth(member)).expect(200);
+    expect(older.body.data[0].id).toBe(feed.body.data[1].id);
+  });
+
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {
     const list = await request(app.getHttpServer()).get(path(orgA)).set('Authorization', auth(owner))
       .query({ page: 1, limit: 1, sortBy: 'title', sortOrder: 'asc' }).expect(200);

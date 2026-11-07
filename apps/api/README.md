@@ -150,6 +150,8 @@ de produção.
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
 | GET, POST | `/organizations/:organizationId/tasks/:taskId/comments` | JWT |
 | PATCH, DELETE | `/organizations/:organizationId/tasks/:taskId/comments/:commentId` | JWT |
+| GET | `/organizations/:organizationId/activity` | JWT |
+| GET | `/organizations/:organizationId/tasks/:taskId/activity` | JWT |
 
 ### Refresh token
 
@@ -248,6 +250,27 @@ No banco, `task_comments` referencia a tarefa por `(taskId, organizationId)`,
 o que impede um comentário de apontar para uma tarefa de outra organização.
 Comentários são excluídos junto com a tarefa.
 
+### Histórico de alterações
+
+Criação, alteração e exclusão de tarefas e novos comentários geram registros em
+`task_activities`, na mesma transação da operação: se o registro falhar, a
+operação também é desfeita. Cada item tem `id`, `type` (`TASK_CREATED`,
+`TASK_UPDATED`, `TASK_DELETED`, `COMMENT_ADDED`), `taskId`, `taskTitle`,
+`changes`, `createdAt` e `actor` (`id`, `name`).
+
+- Em `TASK_UPDATED`, `changes` lista `{ field, from, to }` para `title`,
+  `status`, `assignee` (nomes), `dueDate` (ISO) e `description`. A descrição
+  registra apenas que mudou, com `from` e `to` nulos. Uma atualização que só
+  incrementa a versão não gera registro.
+- O conteúdo dos comentários não é copiado para o histórico.
+- `taskTitle` guarda o título no momento do evento. Ao excluir a tarefa,
+  `taskId` passa a ser `null` nos registros dela, que continuam no histórico da
+  organização.
+- `GET /organizations/:organizationId/activity?limit=20&before=<id>` lista o
+  histórico da organização do mais recente para o mais antigo; `limit` vai de 1
+  a 100. `GET .../tasks/:taskId/activity` (padrão 50) lista o de uma tarefa
+  existente. Ambos retornam `{ data, nextCursor }` e exigem associação (404).
+
 ### Resumo para o dashboard
 
 `GET /organizations/:organizationId/tasks/summary` exige JWT e associação à
@@ -262,8 +285,8 @@ ordenadas por prazo crescente (nulos por último) e ID. `dueSoon` contém tarefa
 `TODO` ou `IN_PROGRESS` com prazo entre `asOf` e `dueUntil`, inclusive;
 `dueUntil` corresponde a sete períodos de 24 horas após `asOf`. Tarefas
 atrasadas não são incluídas. A ordenação é por prazo e ID crescentes.
-`recentlyUpdated` usa atualização e ID decrescentes; não representa histórico
-de atividades.
+`recentlyUpdated` usa atualização e ID decrescentes; para o histórico de
+eventos, use os endpoints de atividade.
 
 ### Listagem de tarefas
 

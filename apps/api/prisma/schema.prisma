@@ -13,6 +13,13 @@ enum MembershipRole {
   MEMBER
 }
 
+enum ActivityType {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_DELETED
+  COMMENT_ADDED
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -21,14 +28,15 @@ enum TaskStatus {
 }
 
 model Organization {
-  id          String        @id @default(uuid()) @db.Uuid
-  name        String        @db.VarChar(120)
-  slug        String        @unique @db.VarChar(80)
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String         @db.VarChar(120)
+  slug        String         @unique @db.VarChar(80)
   memberships Membership[]
   tasks       Task[]
   comments    TaskComment[]
-  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  activities  TaskActivity[]
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
 
   @@map("organizations")
 }
@@ -47,6 +55,7 @@ model User {
   memberships         Membership[]
   refreshTokens       RefreshToken[]
   comments            TaskComment[]  @relation("CommentAuthor")
+  activities          TaskActivity[] @relation("ActivityActor")
   createdTasks        Task[]         @relation("TaskCreator")
   assignedTasks       Task[]         @relation("TaskAssignee")
   createdAt           DateTime       @default(now()) @db.Timestamptz(3)
@@ -90,21 +99,22 @@ model Membership {
 }
 
 model Task {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  title          String        @db.VarChar(200)
-  description    String?       @db.Text
-  status         TaskStatus    @default(TODO)
-  creatorId      String        @db.Uuid
-  assigneeId     String?       @db.Uuid
-  version        Int           @default(1)
-  dueDate        DateTime?     @db.Timestamptz(3)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator        User          @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  assignee       User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  title          String         @db.VarChar(200)
+  description    String?        @db.Text
+  status         TaskStatus     @default(TODO)
+  creatorId      String         @db.Uuid
+  assigneeId     String?        @db.Uuid
+  version        Int            @default(1)
+  dueDate        DateTime?      @db.Timestamptz(3)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        User           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee       User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   comments       TaskComment[]
-  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+  activities     TaskActivity[]
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
 
   /// Permite que registros dependentes referenciem a tarefa junto com sua organização.
   @@unique([id, organizationId])
@@ -129,4 +139,26 @@ model TaskComment {
 
   @@index([taskId, createdAt, id])
   @@map("task_comments")
+}
+
+/// Histórico de uma organização. `taskTitle` guarda o título no momento do
+/// evento, para que atividades de tarefas excluídas continuem legíveis.
+model TaskActivity {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  /// Nulo quando a tarefa foi excluída.
+  taskId         String?      @db.Uuid
+  taskTitle      String       @db.VarChar(200)
+  actorId        String       @db.Uuid
+  type           ActivityType
+  /// Em TASK_UPDATED: lista de { field, from, to } dos campos alterados.
+  changes        Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  actor          User         @relation("ActivityActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([taskId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("task_activities")
 }

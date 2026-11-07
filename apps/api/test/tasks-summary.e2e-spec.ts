@@ -5,6 +5,7 @@ import request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TasksController } from '../src/tasks/tasks.controller.js';
+import { ActivityService } from '../src/activity/activity.service.js';
 import { TasksService } from '../src/tasks/tasks.service.js';
 
 describe('Task summary (HTTP with Prisma stub)', () => {
@@ -58,6 +59,7 @@ describe('Task summary (HTTP with Prisma stub)', () => {
       controllers: [TasksController],
       providers: [
         TasksService, JwtAuthGuard,
+        { provide: ActivityService, useValue: { record: vi.fn() } },
         { provide: PrismaService, useValue: {
           membership: { findUnique }, task: { groupBy, findMany },
           user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },

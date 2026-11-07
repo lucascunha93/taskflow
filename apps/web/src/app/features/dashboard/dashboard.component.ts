@@ -8,10 +8,11 @@ import { TasksService } from '../tasks/tasks.service';
 import { DashboardSummary, DashboardTask } from './dashboard.models';
 import { DashboardTaskDetailComponent } from './dashboard-task-detail.component';
 import { DashboardTaskListComponent } from './dashboard-task-list.component';
+import { ActivityFeedComponent } from '../activity/activity-feed.component';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [DatePipe, RouterLink, DashboardTaskDetailComponent, DashboardTaskListComponent],
+  imports: [ActivityFeedComponent, DatePipe, RouterLink, DashboardTaskDetailComponent, DashboardTaskListComponent],
   providers: [TasksService],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dashboard.component.html',
@@ -25,7 +26,7 @@ export class DashboardComponent {
   private readonly summaryState = signal<DashboardSummary | null>(null);
   private readonly statusState = signal<'loading' | 'ready' | 'error'>('loading');
   private readonly errorState = signal('');
-  private readonly reload = signal(0);
+  protected readonly reload = signal(0);
   protected readonly selected = signal<{ id: string; organizationId: string } | null>(null);
   protected readonly notice = signal('');
   protected readonly summary = computed(() => this.activeId() === this.contextId() ? this.summaryState() : null);
@@ -76,6 +77,14 @@ export class DashboardComponent {
       this.selected.set({ id: task.id, organizationId: task.organizationId });
       this.notice.set('');
     }
+  }
+
+  /** Abre uma tarefa a partir da atividade recente da organização ativa. */
+  protected openActivity(taskId: string): void {
+    const organizationId = this.activeId();
+    if (!organizationId) return;
+    this.selected.set({ id: taskId, organizationId });
+    this.notice.set('');
   }
 
   protected changed(message: string): void {

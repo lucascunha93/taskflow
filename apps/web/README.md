@@ -79,8 +79,9 @@ As datas são exibidas no horário local.
 
 As tarefas abrem detalhes e permitem edição ou exclusão com as mesmas regras
 da página de tarefas; após uma alteração, o dashboard é atualizado. O botão
-Atualizar também consulta novamente a API. A lista de atualizações recentes
-não é um histórico de atividades. Ao trocar de organização, dados anteriores
+Atualizar também consulta novamente a API. A lista de atualizações recentes mostra
+a última alteração de cada tarefa; a atividade recente, abaixo dela, mostra os
+eventos em ordem cronológica. Ao trocar de organização, dados anteriores
 são ocultados e requisições pendentes canceladas ou ignoradas; a autorização
 continua sendo responsabilidade do backend.
 
@@ -114,6 +115,16 @@ comentários, marcados como "(editado)"; o autor, proprietários e
 administradores podem excluí-los, com confirmação. A troca de organização
 cancela as requisições e limpa a lista. Uma falha ao enviar não repete o envio
 automaticamente, para evitar comentários duplicados.
+
+### Histórico
+
+O detalhe da tarefa mostra o histórico dela, com quem criou, alterou (status,
+responsável, prazo, título e descrição, com valores anteriores e novos) ou
+comentou, em páginas de 20. O dashboard mostra a atividade recente da
+organização em páginas de 10; itens de tarefas existentes abrem o detalhe, e
+atividades de tarefas excluídas aparecem apenas como texto. "Atualizar" recarrega
+o histórico; o dashboard também o recarrega após uma alteração feita pelo
+detalhe.
 
 ## Membros
 

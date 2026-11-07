@@ -42,8 +42,8 @@ describe('DashboardComponent', () => {
     element = fixture.nativeElement as HTMLElement;
   });
   afterEach(() => {
-    // O detalhe da tarefa também carrega seus comentários, testados em seu próprio spec.
-    for (const request of http.match((req) => req.url.endsWith('/comments'))) {
+    // Comentários e histórico são carregados junto e testados em seus próprios specs.
+    for (const request of http.match((req) => req.url.endsWith('/comments') || req.url.endsWith('/activity'))) {
       if (!request.cancelled) request.flush({ data: [], nextCursor: null });
     }
     fixture.destroy();
@@ -70,7 +70,7 @@ describe('DashboardComponent', () => {
     expect(element.textContent).toContain('Minhas tarefas');
     expect(element.textContent).toContain('Vence em breve');
     expect(element.textContent).toContain('Tarefas recentemente atualizadas');
-    expect(element.textContent).toContain('não um histórico de atividades');
+    expect(element.textContent).toContain('o histórico detalhado está abaixo');
     expect(element.querySelectorAll('app-dashboard-task-list')).toHaveLength(3);
   });
 

@@ -44,7 +44,10 @@
   <div class="recent">
     <app-dashboard-task-list title="Tarefas recentemente atualizadas" emptyText="Nenhuma tarefa foi encontrada."
       mode="recent" [summary]="data" [tasks]="data.recentlyUpdated" (opened)="open($event)" />
-    <p class="hint">Esta lista mostra a última atualização de cada tarefa, não um histórico de atividades.</p>
+    <p class="hint">Esta lista mostra a última atualização de cada tarefa; o histórico detalhado está abaixo.</p>
+  </div>
+  <div class="activity">
+    <app-activity-feed [reload]="reload()" (opened)="openActivity($event)" />
   </div>
   <a class="text-link" routerLink="/tasks">Ver todas as tarefas</a>
 }

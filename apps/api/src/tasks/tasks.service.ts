@@ -13,6 +13,8 @@ import { CreateTaskDto } from './dto/create-task.dto.js';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { taskDateBound } from './task-date-range.js';
+import { ActivityService } from '../activity/activity.service.js';
+import { taskChanges } from '../activity/task-changes.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -47,7 +49,10 @@ type PaginatedTasks = {
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activity: ActivityService,
+  ) {}
 
   async summary(organizationId: string, userId: string) {
     await this.assertMembership(organizationId, userId);
@@ -190,32 +195,37 @@ export class TasksService {
       }
     }
 
-    const task = await this.prisma.task.create({
-      data: {
-        title: dto.title.trim(),
-        ...(dto.status === undefined ? {} : { status: dto.status }),
-        description: dto.description?.trim() || null,
-        organizationId,
-        creatorId: userId,
-        assigneeId: dto.assigneeId ?? null,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-      },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        version: true,
-        dueDate: true,
-        createdAt: true,
-        updatedAt: true,
-        creatorId: true,
-        assigneeId: true,
-        organizationId: true,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({
+        data: {
+          title: dto.title.trim(),
+          ...(dto.status === undefined ? {} : { status: dto.status }),
+          description: dto.description?.trim() || null,
+          organizationId,
+          creatorId: userId,
+          assigneeId: dto.assigneeId ?? null,
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          version: true,
+          dueDate: true,
+          createdAt: true,
+          updatedAt: true,
+          creatorId: true,
+          assigneeId: true,
+          organizationId: true,
+        },
+      });
 
-    return task;
+      await this.activity.record(tx, {
+        organizationId, taskId: task.id, taskTitle: task.title, actorId: userId, type: 'TASK_CREATED',
+      });
+      return task;
+    });
   }
 
   async update(
@@ -234,35 +244,53 @@ export class TasksService {
       throw new ForbiddenException('O responsável precisa pertencer à organização.');
     }
 
-    const updated = await this.prisma.task.updateManyAndReturn({
-      where: {
-        id: taskId,
-        organizationId,
-        version: dto.version,
-        organization: { memberships: { some: { userId } } },
-        ...(dto.assigneeId != null
-          ? {
-              AND: [{
-                organization: {
-                  memberships: { some: { userId: dto.assigneeId } },
-                },
-              }],
-            }
-          : {}),
-      },
-      data: {
-        title: dto.title?.trim(),
-        description: typeof dto.description === 'string' ? dto.description.trim() : dto.description,
-        status: dto.status,
-        assigneeId: dto.assigneeId,
-        dueDate: dto.dueDate == null ? dto.dueDate : new Date(dto.dueDate),
-        version: { increment: 1 },
-      },
-      select: taskDetailsSelect,
+    const saved = await this.prisma.$transaction(async (tx) => {
+      // Estado anterior para o histórico. Como toda escrita incrementa a versão,
+      // uma atualização bem-sucedida partiu exatamente deste estado.
+      const before = await tx.task.findFirst({
+        where: { id: taskId, organizationId, version: dto.version, organization: { memberships: { some: { userId } } } },
+        select: taskDetailsSelect,
+      });
+      const updated = await tx.task.updateManyAndReturn({
+        where: {
+          id: taskId,
+          organizationId,
+          version: dto.version,
+          organization: { memberships: { some: { userId } } },
+          ...(dto.assigneeId != null
+            ? {
+                AND: [{
+                  organization: {
+                    memberships: { some: { userId: dto.assigneeId } },
+                  },
+                }],
+              }
+            : {}),
+        },
+        data: {
+          title: dto.title?.trim(),
+          description: typeof dto.description === 'string' ? dto.description.trim() : dto.description,
+          status: dto.status,
+          assigneeId: dto.assigneeId,
+          dueDate: dto.dueDate == null ? dto.dueDate : new Date(dto.dueDate),
+          version: { increment: 1 },
+        },
+        select: taskDetailsSelect,
+      });
+
+      if (updated.length === 0) return null;
+      const after = updated[0];
+      const changes = before ? taskChanges(before, after) : [];
+      if (changes.length > 0) {
+        await this.activity.record(tx, {
+          organizationId, taskId, taskTitle: after.title, actorId: userId, type: 'TASK_UPDATED', changes,
+        });
+      }
+      return after;
     });
 
-    if (updated.length > 0) {
-      return updated[0];
+    if (saved) {
+      return saved;
     }
 
     const current = await this.findOne(organizationId, taskId, userId);
@@ -285,16 +313,28 @@ export class TasksService {
   ): Promise<void> {
     await this.assertMembership(organizationId, userId);
 
-    const result = await this.prisma.task.deleteMany({
-      where: {
-        id: taskId,
-        organizationId,
-        version,
-        organization: { memberships: { some: { userId } } },
-      },
+    const removed = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.task.findFirst({
+        where: { id: taskId, organizationId, version, organization: { memberships: { some: { userId } } } },
+        select: { title: true },
+      });
+      const result = await tx.task.deleteMany({
+        where: {
+          id: taskId,
+          organizationId,
+          version,
+          organization: { memberships: { some: { userId } } },
+        },
+      });
+      if (result.count === 0) return false;
+      // A tarefa não existe mais: a atividade guarda apenas o título.
+      await this.activity.record(tx, {
+        organizationId, taskId: null, taskTitle: before?.title ?? 'Tarefa excluída', actorId: userId, type: 'TASK_DELETED',
+      });
+      return true;
     });
 
-    if (result.count > 0) {
+    if (removed) {
       return;
     }
 

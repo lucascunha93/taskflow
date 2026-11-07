@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
+import { ActivityService } from '../activity/activity.service.js';
 
 describe('TasksService', () => {
   let service: TasksService;
@@ -21,9 +22,14 @@ describe('TasksService', () => {
   const organizationId = 'organization-a';
   const userId = 'creator';
 
+  let activity: { record: ReturnType<typeof vi.fn> };
+
   beforeEach(async () => {
+    activity = { record: vi.fn().mockResolvedValue(undefined) };
     prisma = {
-      $transaction: vi.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+      // Aceita os dois estilos de transação: lista de operações e callback interativo.
+      $transaction: vi.fn((operations: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
+        typeof operations === 'function' ? operations(prisma) : Promise.all(operations)),
       membership: { findUnique: vi.fn() },
       task: {
         create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(),
@@ -31,7 +37,11 @@ describe('TasksService', () => {
       },
     };
     const module = await Test.createTestingModule({
-      providers: [TasksService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        TasksService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ActivityService, useValue: activity },
+      ],
     }).compile();
     service = module.get(TasksService);
   });
@@ -193,9 +203,17 @@ describe('TasksService', () => {
     }));
   });
 
-  it('updates supplied fields atomically and increments the version', async () => {
-    const updated = { id: 'task-a', organizationId, version: 3 };
+  it('updates supplied fields atomically, increments the version and records the changes', async () => {
+    const before = {
+      id: 'task-a', organizationId, version: 2, title: 'Old', description: null, status: TaskStatus.TODO,
+      dueDate: null, assignee: null,
+    };
+    const updated = {
+      ...before, version: 3, title: 'Updated', description: 'Details', status: TaskStatus.DONE,
+      dueDate: new Date('2026-10-30'), assignee: { id: 'member', name: 'Member' },
+    };
     prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.findFirst.mockResolvedValue(before);
     prisma.task.updateManyAndReturn.mockResolvedValue([updated]);
 
     await expect(service.update(organizationId, 'task-a', userId, {
@@ -217,7 +235,29 @@ describe('TasksService', () => {
         assigneeId: 'member', dueDate: new Date('2026-10-30'), version: { increment: 1 },
       },
     }));
-    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+    expect(prisma.task.findFirst).toHaveBeenCalledOnce();
+    expect(prisma.task.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'task-a', organizationId, version: 2, organization: { memberships: { some: { userId } } } },
+    }));
+    expect(activity.record).toHaveBeenCalledWith(prisma, {
+      organizationId, taskId: 'task-a', taskTitle: 'Updated', actorId: userId, type: 'TASK_UPDATED',
+      changes: [
+        { field: 'title', from: 'Old', to: 'Updated' },
+        { field: 'description', from: null, to: null },
+        { field: 'status', from: 'TODO', to: 'DONE' },
+        { field: 'assignee', from: null, to: 'Member' },
+        { field: 'dueDate', from: null, to: '2026-10-30T00:00:00.000Z' },
+      ],
+    });
+  });
+
+  it('does not record history when only the version changes', async () => {
+    const task = { id: 'task-a', organizationId, version: 1, title: 'Same', description: null, status: 'TODO', dueDate: null, assignee: null };
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.findFirst.mockResolvedValue(task);
+    prisma.task.updateManyAndReturn.mockResolvedValue([{ ...task, version: 2 }]);
+    await service.update(organizationId, 'task-a', userId, { version: 1 });
+    expect(activity.record).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -313,12 +353,15 @@ describe('TasksService', () => {
     prisma.task.updateManyAndReturn.mockResolvedValue([]);
     await expect(service.update(organizationId, 'task-a', userId, { version: 1, title: 'Title' }))
       .rejects.toMatchObject({ status: 404 });
-    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+    // Somente a leitura do estado anterior, dentro da transação; nenhuma consulta de fallback.
+    expect(prisma.task.findFirst).toHaveBeenCalledOnce();
+    expect(activity.record).not.toHaveBeenCalled();
   });
 
   it('deletes only the requested version and organization in a single conditional operation', async () => {
     prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
     prisma.task.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.task.findFirst.mockResolvedValue({ title: 'Removed task' });
     await expect(service.remove(organizationId, 'task-a', userId, 3)).resolves.toBeUndefined();
     expect(prisma.task.deleteMany).toHaveBeenCalledWith({
       where: {
@@ -328,7 +371,10 @@ describe('TasksService', () => {
         organization: { memberships: { some: { userId } } },
       },
     });
-    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+    expect(prisma.task.findFirst).toHaveBeenCalledOnce();
+    expect(activity.record).toHaveBeenCalledWith(prisma, {
+      organizationId, taskId: null, taskTitle: 'Removed task', actorId: userId, type: 'TASK_DELETED',
+    });
   });
 
   it('does not delete for a requester without an organization membership', async () => {
@@ -366,7 +412,8 @@ describe('TasksService', () => {
     prisma.task.deleteMany.mockResolvedValue({ count: 0 });
     await expect(service.remove(organizationId, 'task-a', userId, 1))
       .rejects.toMatchObject({ status: 404 });
-    expect(prisma.task.findFirst).not.toHaveBeenCalled();
+    expect(prisma.task.findFirst).toHaveBeenCalledOnce();
+    expect(activity.record).not.toHaveBeenCalled();
   });
 
   it('propagates unexpected database failures during deletion', async () => {
