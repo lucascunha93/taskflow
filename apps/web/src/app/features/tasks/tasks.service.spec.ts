@@ -18,7 +18,7 @@ const task = {
   creator: { id: 'user-1', name: 'Pessoa A' }, assignee: null,
 };
 const query: TaskQuery = {
-  page: 2, limit: 20, status: 'DONE', assigneeId: 'user-2', creatorId: 'user-1', search: 'teste',
+  page: 2, limit: 20, status: 'DONE', assigneeId: 'user-2', creatorId: 'user-1', projectId: 'project-1', search: 'teste',
   dueDateFrom: '2026-01-01', dueDateTo: '2026-01-31', sortBy: 'title', sortOrder: 'asc',
 };
 

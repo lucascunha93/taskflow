@@ -23,6 +23,13 @@
       </a>
     </li>
     <li>
+      <a class="nav-item" routerLink="/projects" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
+        (click)="navigated.emit()">
+        <app-icon name="projects" />
+        <span>Projetos</span>
+      </a>
+    </li>
+    <li>
       <a class="nav-item" routerLink="/members" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
         (click)="navigated.emit()">
         <app-icon name="members" />

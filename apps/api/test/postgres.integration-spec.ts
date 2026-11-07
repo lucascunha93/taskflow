@@ -15,6 +15,7 @@ import { OrganizationsService } from '../src/organizations/organizations.service
 import { PrismaModule } from '../src/prisma/prisma.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TasksModule } from '../src/tasks/tasks.module.js';
+import { ProjectsModule } from '../src/projects/projects.module.js';
 
 type TestUser = { id: string; email: string; token: string };
 
@@ -82,7 +83,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     process.env.DATABASE_URL = raw;
     process.env.JWT_SECRET = `integration-only-${randomUUID()}-${randomUUID()}`;
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, OrganizationsModule, TasksModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, OrganizationsModule, TasksModule, ProjectsModule],
     })
       // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
       .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
@@ -397,6 +398,53 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     for (const id of [task.body.id, selfAssigned.body.id]) {
       await request(app.getHttpServer()).delete(`${path(orgA)}/${id}?version=1`).set('Authorization', auth(owner)).expect(204);
     }
+  });
+
+  it('manages projects per tenant, filters tasks by project and keeps tasks when a project is deleted', async () => {
+    const projects = (org: string) => `/organizations/${org}/projects`;
+    await request(app.getHttpServer()).post(projects(orgA)).set('Authorization', auth(member)).send({ name: 'Bloqueado' }).expect(403);
+    const created = await request(app.getHttpServer()).post(projects(orgA)).set('Authorization', auth(admin))
+      .send({ name: ` Site ${runId} `, description: 'Novo site' }).expect(201);
+    expect(created.body).toMatchObject({ name: `Site ${runId}`, taskCount: 0, organizationId: orgA });
+    await request(app.getHttpServer()).post(projects(orgA)).set('Authorization', auth(owner)).send({ name: `Site ${runId}` }).expect(409);
+    const foreign = await request(app.getHttpServer()).post(projects(orgB)).set('Authorization', auth(other))
+      .send({ name: `Outro ${runId}` }).expect(201);
+    await request(app.getHttpServer()).get(projects(orgB)).set('Authorization', auth(owner)).expect(404);
+    await request(app.getHttpServer()).get(`${projects(orgA)}/${foreign.body.id}`).set('Authorization', auth(owner)).expect(404);
+
+    await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title: 'Cross project task', projectId: foreign.body.id }).expect(400);
+    const inProject = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(member))
+      .send({ title: 'Project task', projectId: created.body.id }).expect(201);
+    expect(inProject.body.projectId).toBe(created.body.id);
+    await request(app.getHttpServer()).put(`${path(orgA)}/${inProject.body.id}`).set('Authorization', auth(member))
+      .send({ version: 1, projectId: foreign.body.id }).expect(400);
+
+    const filtered = await request(app.getHttpServer()).get(`${path(orgA)}?projectId=${created.body.id}`)
+      .set('Authorization', auth(member)).expect(200);
+    expect(filtered.body.data.map((task: { id: string }) => task.id)).toEqual([inProject.body.id]);
+    expect(filtered.body.data[0].project).toEqual({ id: created.body.id, name: `Site ${runId}` });
+    const listed = await request(app.getHttpServer()).get(projects(orgA)).set('Authorization', auth(member)).expect(200);
+    expect(listed.body.find((item: { id: string }) => item.id === created.body.id)).toMatchObject({ taskCount: 1 });
+
+    const renamed = await request(app.getHttpServer()).patch(`${projects(orgA)}/${created.body.id}`).set('Authorization', auth(owner))
+      .send({ name: `Portal ${runId}`, description: null }).expect(200);
+    expect(renamed.body).toMatchObject({ name: `Portal ${runId}`, description: null });
+    const moved = await request(app.getHttpServer()).put(`${path(orgA)}/${inProject.body.id}`).set('Authorization', auth(member))
+      .send({ version: 1, projectId: null }).expect(200);
+    expect(moved.body.project).toBeNull();
+    const history = await request(app.getHttpServer()).get(`${path(orgA)}/${inProject.body.id}/activity`)
+      .set('Authorization', auth(member)).expect(200);
+    expect(history.body.data[0].changes).toEqual([{ field: 'project', from: `Portal ${runId}`, to: null }]);
+
+    await request(app.getHttpServer()).put(`${path(orgA)}/${inProject.body.id}`).set('Authorization', auth(member))
+      .send({ version: 2, projectId: created.body.id }).expect(200);
+    await request(app.getHttpServer()).delete(`${projects(orgA)}/${created.body.id}`).set('Authorization', auth(member)).expect(403);
+    await request(app.getHttpServer()).delete(`${projects(orgA)}/${created.body.id}`).set('Authorization', auth(admin)).expect(204);
+    const kept = await request(app.getHttpServer()).get(`${path(orgA)}/${inProject.body.id}`).set('Authorization', auth(member)).expect(200);
+    expect(kept.body).toMatchObject({ projectId: null, project: null });
+    await request(app.getHttpServer()).delete(`${path(orgA)}/${inProject.body.id}?version=${kept.body.version}`)
+      .set('Authorization', auth(owner)).expect(204);
   });
 
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {

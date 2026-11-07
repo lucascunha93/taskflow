@@ -1,0 +1,76 @@
+<section class="page">
+  <p class="eyebrow">ESPAÇO DE TRABALHO</p>
+  <div class="page-heading">
+    <div>
+      <h1>Projetos</h1>
+      @if (organizations.active(); as organization) { <p class="description">{{ organization.name }}</p> }
+    </div>
+    @if (organizations.active() && canManage() && editing() === null) {
+      <button type="button" class="tf-button" (click)="startCreate()">Novo projeto</button>
+    }
+  </div>
+
+  @if (!organizations.active()) {
+    <p class="description">Selecione ou crie uma organização para ver os projetos.</p>
+    <a class="tf-button" routerLink="/">Escolher organização</a>
+  } @else {
+    @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+    @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+
+    @if (editing(); as target) {
+      <form class="editor" [formGroup]="form" (ngSubmit)="save()" novalidate [attr.aria-busy]="busy()"
+        aria-labelledby="project-form-title">
+        <h2 id="project-form-title">{{ target === 'new' ? 'Novo projeto' : 'Editar projeto' }}</h2>
+        <label for="project-name">Nome</label>
+        <input id="project-name" class="tf-field" formControlName="name" maxlength="120"
+          [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid" />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <p class="field-error">Informe um nome com 2 a 120 caracteres.</p>
+        }
+        <label for="project-description">Descrição <span>(opcional)</span></label>
+        <textarea id="project-description" class="tf-field" rows="3" maxlength="2000" formControlName="description"></textarea>
+        <div class="actions">
+          <button type="submit" class="tf-button" [disabled]="busy()">{{ busy() ? 'Salvando…' : 'Salvar projeto' }}</button>
+          <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="editing.set(null)">Cancelar</button>
+        </div>
+      </form>
+    }
+
+    @if (projects.status() === 'loading') {
+      <p role="status">Carregando projetos…</p>
+    } @else if (projects.status() === 'error') {
+      <p class="message" role="alert">Não foi possível carregar os projetos.</p>
+      <button type="button" class="tf-button tf-button--subtle" (click)="projects.refresh()">Tentar novamente</button>
+    } @else if (projects.projects().length === 0) {
+      <p class="empty">
+        Nenhum projeto ainda.
+        @if (canManage()) { Crie um projeto para agrupar tarefas e acompanhá-las em um quadro. }
+        @else { Proprietários e administradores podem criar projetos. }
+      </p>
+    } @else {
+      <ul class="project-list">
+        @for (project of projects.projects(); track project.id) {
+          <li class="project">
+            <div class="project-main">
+              <a class="project-name" [routerLink]="['/projects', project.id]">{{ project.name }}</a>
+              @if (project.description) { <p>{{ project.description }}</p> }
+              <span class="count">{{ project.taskCount }} {{ project.taskCount === 1 ? 'tarefa' : 'tarefas' }}</span>
+            </div>
+            <div class="actions">
+              <a class="tf-button tf-button--subtle" [routerLink]="['/projects', project.id]">Abrir quadro</a>
+              @if (canManage()) {
+                <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="startEdit(project)">Editar</button>
+                @if (confirmingId() === project.id) {
+                  <button type="button" class="tf-button" [disabled]="busy()" (click)="remove(project)">Confirmar exclusão</button>
+                  <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirmingId.set(null)">Cancelar</button>
+                } @else {
+                  <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirmingId.set(project.id)">Excluir</button>
+                }
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

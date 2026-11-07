@@ -1,0 +1,73 @@
+<section class="board-page">
+  <a class="back" routerLink="/projects">← Projetos</a>
+  @if (!organizations.active()) {
+    <p class="description">Selecione uma organização para ver o quadro.</p>
+  } @else if (loading()) {
+    <p role="status">Carregando quadro…</p>
+  } @else if (error()) {
+    <p class="message" role="alert">{{ error() }}</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="refresh()">Tentar novamente</button>
+  } @else if (project(); as current) {
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">PROJETO</p>
+        <h1>{{ current.name }}</h1>
+        @if (current.description) { <p class="description">{{ current.description }}</p> }
+      </div>
+      @if (!selectedId() && !creating()) {
+        <div class="actions">
+          <button type="button" class="tf-button tf-button--subtle" (click)="refresh()">Atualizar</button>
+          <button type="button" class="tf-button" (click)="notice.set(''); creating.set(true)">Nova tarefa</button>
+        </div>
+      }
+    </div>
+
+    @if (selectedId(); as taskId) {
+      <app-task-detail [taskId]="taskId" (closed)="selectedId.set(null)" (changed)="changed($event)" />
+    } @else if (creating()) {
+      <section class="editor" aria-labelledby="board-create-title">
+        <h2 id="board-create-title">Nova tarefa em {{ current.name }}</h2>
+        @if (createError()) { <p class="message" role="alert">{{ createError() }}</p> }
+        <app-task-form [busy]="createBusy()" [defaultProjectId]="current.id" (submitted)="create($event)"
+          (cancelled)="creating.set(false); createError.set('')" />
+      </section>
+    } @else {
+      @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+      <p class="sr-status" role="status" aria-live="polite">{{ moveMessage() }}</p>
+      @if (truncated()) {
+        <p class="hint">Algumas colunas têm mais de 100 tarefas; veja todas em <a [routerLink]="['/tasks']">Tarefas</a> filtrando por projeto.</p>
+      }
+      <div class="board">
+        @for (column of columns(); track column.status) {
+          <section class="column" [class.column--target]="dropTarget() === column.status"
+            [attr.aria-labelledby]="'column-' + column.status"
+            (dragover)="dragOver(column.status, $event)" (dragleave)="dropTarget.set(null)" (drop)="drop(column.status, $event)">
+            <h2 [id]="'column-' + column.status">{{ column.label }} <span class="count">{{ column.total }}</span></h2>
+            @if (column.tasks.length === 0) {
+              <p class="empty">Nenhuma tarefa.</p>
+            } @else {
+              <ul>
+                @for (task of column.tasks; track task.id) {
+                  <li class="card" draggable="true" [class.card--moving]="movingId() === task.id"
+                    (dragstart)="dragStart(task, $event)" (dragend)="dragEnd()">
+                    <button type="button" class="card-title" (click)="selectedId.set(task.id)">{{ task.title }}</button>
+                    <span class="card-meta">{{ task.assignee?.name || 'Sem responsável' }}</span>
+                    @if (task.dueDate) { <span class="card-meta">Vence {{ task.dueDate | date: 'dd/MM/yyyy' }}</span> }
+                    <label class="move">
+                      <span class="sr-only">Mover “{{ task.title }}” para</span>
+                      <select class="tf-field" [disabled]="movingId() !== null" (change)="onMoveSelect(task, $event)">
+                        @for (status of statuses; track status.value) {
+                          <option [value]="status.value" [selected]="status.value === task.status">{{ status.label }}</option>
+                        }
+                      </select>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        }
+      </div>
+    }
+  }
+</section>

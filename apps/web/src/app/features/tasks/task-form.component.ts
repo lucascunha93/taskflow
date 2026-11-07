@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, output } fro
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MembersService } from '../members/members.service';
 import { Member } from '../members/member.models';
+import { ProjectsService } from '../projects/projects.service';
 import { CreateTask, TASK_STATUSES, Task, TaskStatus, UpdateTask } from './task.models';
 
 function titleValidator(control: AbstractControl<string>): ValidationErrors | null {
@@ -28,17 +29,22 @@ export class TaskFormComponent {
   readonly task = input<Task | null>(null);
   readonly busy = input(false);
   readonly locked = input(false);
+  /** Projeto pré-selecionado ao criar (por exemplo, a partir do quadro). */
+  readonly defaultProjectId = input<string | null>(null);
   readonly submitted = output<CreateTask | UpdateTask>();
   readonly cancelled = output<void>();
   protected readonly members = inject(MembersService);
+  protected readonly projects = inject(ProjectsService);
   protected readonly statuses = TASK_STATUSES;
   protected readonly isCurrentAssignee = (member: Member): boolean => member.user.id === this.task()?.assigneeId;
+  protected readonly hasProject = (id: string): boolean => this.projects.projects().some((project) => project.id === id);
   private readonly fb = inject(FormBuilder).nonNullable;
   protected readonly form = this.fb.group({
     title: ['', titleValidator],
     description: ['', Validators.maxLength(5000)],
     status: this.fb.control<TaskStatus>('TODO', Validators.required),
     assigneeId: [''],
+    projectId: [''],
     dueDate: [''],
   });
 
@@ -50,6 +56,7 @@ export class TaskFormComponent {
         description: task?.description ?? '',
         status: task?.status ?? 'TODO',
         assigneeId: task?.assigneeId ?? '',
+        projectId: task ? task.projectId ?? '' : this.defaultProjectId() ?? '',
         dueDate: localDate(task?.dueDate ?? null),
       });
     });
@@ -75,6 +82,7 @@ export class TaskFormComponent {
       const data: CreateTask = { title, status: value.status };
       if (description) data.description = description;
       if (value.assigneeId) data.assigneeId = value.assigneeId;
+      if (value.projectId) data.projectId = value.projectId;
       if (date) data.dueDate = date.toISOString();
       this.submitted.emit(data);
       return;
@@ -84,6 +92,7 @@ export class TaskFormComponent {
     if ((description || null) !== task.description) data.description = description || null;
     if (value.status !== task.status) data.status = value.status;
     if ((value.assigneeId || null) !== task.assigneeId) data.assigneeId = value.assigneeId || null;
+    if ((value.projectId || null) !== (task.projectId ?? null)) data.projectId = value.projectId || null;
     if (value.dueDate !== localDate(task.dueDate)) data.dueDate = date?.toISOString() ?? null;
     this.submitted.emit(data);
   }

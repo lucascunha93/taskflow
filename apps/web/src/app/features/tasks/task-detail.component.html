@@ -18,6 +18,7 @@
           <div><dt>Descrição</dt><dd class="description">{{ current.description || 'Sem descrição' }}</dd></div>
           <div><dt>Criador</dt><dd>{{ current.creator.name }}</dd></div>
           <div><dt>Responsável</dt><dd>{{ current.assignee?.name || 'Sem responsável' }}</dd></div>
+          <div><dt>Projeto</dt><dd>{{ current.project?.name || 'Sem projeto' }}</dd></div>
           <div><dt>Vencimento</dt><dd>{{ current.dueDate ? (current.dueDate | date:'dd/MM/yyyy HH:mm') : 'Sem prazo' }}</dd></div>
           <div><dt>Criada em</dt><dd>{{ current.createdAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>
           <div><dt>Atualizada em</dt><dd>{{ current.updatedAt | date:'dd/MM/yyyy HH:mm' }}</dd></div>

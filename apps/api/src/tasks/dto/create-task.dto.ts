@@ -33,6 +33,10 @@ export class CreateTaskDto {
     assigneeId?: string;
 
     @IsOptional()
+    @IsUUID()
+    projectId?: string;
+
+    @IsOptional()
     @IsDateString()
     dueDate?: string;
 }

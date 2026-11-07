@@ -10,6 +10,7 @@ export interface TaskRecord {
   status: TaskStatus;
   creatorId: string;
   assigneeId: string | null;
+  projectId: string | null;
   version: number;
   dueDate: string | null;
   createdAt: string;
@@ -19,6 +20,7 @@ export interface TaskRecord {
 export interface Task extends TaskRecord {
   creator: { id: string; name: string };
   assignee: { id: string; name: string } | null;
+  project: { id: string; name: string } | null;
 }
 
 export interface TaskPage {
@@ -32,6 +34,7 @@ export interface TaskQuery {
   status: TaskStatus | '';
   assigneeId: string;
   creatorId: string;
+  projectId: string;
   search: string;
   dueDateFrom: string;
   dueDateTo: string;
@@ -44,6 +47,7 @@ export interface CreateTask {
   description?: string;
   status: TaskStatus;
   assigneeId?: string;
+  projectId?: string;
   dueDate?: string;
 }
 
@@ -53,6 +57,7 @@ export interface UpdateTask {
   description?: string | null;
   status?: TaskStatus;
   assigneeId?: string | null;
+  projectId?: string | null;
   dueDate?: string | null;
 }
 

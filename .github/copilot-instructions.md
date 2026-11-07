@@ -786,10 +786,10 @@ Os indicadores devem ser calculados a partir de dados reais.
 
 ## Fase 8 — Evoluções do produto
 
-- Comentários.
-- Histórico.
-- Notificações.
-- Projetos e quadros.
+- Comentários. (implementado)
+- Histórico. (implementado, inclui atividades recentes no dashboard)
+- Notificações. (implementado: no app, sem e-mail ou tempo real)
+- Projetos e quadros. (implementado)
 - Anexos.
 - Funcionalidades SaaS.
 - Aplicação mobile.

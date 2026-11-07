@@ -126,6 +126,24 @@ atividades de tarefas excluídas aparecem apenas como texto. "Atualizar" recarre
 o histórico; o dashboard também o recarrega após uma alteração feita pelo
 detalhe.
 
+## Projetos e quadros
+
+Em `/projects`, a organização ativa lista seus projetos com a quantidade de
+tarefas. Proprietários e administradores criam, editam e excluem projetos;
+a exclusão pede confirmação e mantém as tarefas, sem projeto. Nomes repetidos
+são recusados pela API.
+
+`/projects/:projectId` mostra o quadro do projeto, com uma coluna por status e
+até 100 tarefas por coluna (atualizadas mais recentemente primeiro); acima disso,
+o quadro indica que a lista completa está em Tarefas. Os cartões podem ser
+arrastados entre colunas ou movidos pelo seletor "Mover para", acessível por
+teclado. Ambos enviam `PUT` com a versão carregada: um 409 recarrega o quadro e
+pede nova tentativa. O título do cartão abre o mesmo detalhe da página de
+tarefas, e "Nova tarefa" cria a tarefa já vinculada ao projeto.
+
+Criação e edição de tarefas têm o campo Projeto, e a lista de tarefas filtra
+por projeto.
+
 ## Notificações
 
 O sino do cabeçalho mostra a quantidade de notificações não lidas e um painel

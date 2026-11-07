@@ -1,4 +1,4 @@
-export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate';
+export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project';
 
 /**
  * Alteração registrada no histórico. A descrição registra apenas que mudou
@@ -16,6 +16,7 @@ export interface TaskSnapshot {
   status: string;
   dueDate: Date | string | null;
   assignee: { id: string; name: string } | null;
+  project?: { id: string; name: string } | null;
 }
 
 export function taskChanges(before: TaskSnapshot, after: TaskSnapshot): ActivityChange[] {
@@ -29,6 +30,9 @@ export function taskChanges(before: TaskSnapshot, after: TaskSnapshot): Activity
   const beforeDue = isoOrNull(before.dueDate);
   const afterDue = isoOrNull(after.dueDate);
   if (beforeDue !== afterDue) changes.push({ field: 'dueDate', from: beforeDue, to: afterDue });
+  if ((before.project?.id ?? null) !== (after.project?.id ?? null)) {
+    changes.push({ field: 'project', from: before.project?.name ?? null, to: after.project?.name ?? null });
+  }
   return changes;
 }
 

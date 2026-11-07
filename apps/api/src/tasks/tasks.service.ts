@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
@@ -28,9 +28,11 @@ const taskDetailsSelect = {
   updatedAt: true,
   creatorId: true,
   assigneeId: true,
+  projectId: true,
   organizationId: true,
   creator: { select: { id: true, name: true } },
   assignee: { select: { id: true, name: true } },
+  project: { select: { id: true, name: true } },
 } satisfies Prisma.TaskSelect;
 
 const summaryTaskSelect = {
@@ -117,6 +119,7 @@ export class TasksService {
       status: query.status,
       assigneeId: query.assigneeId,
       creatorId: query.creatorId,
+      projectId: query.projectId,
       title: query.search === undefined
         ? undefined
         : { contains: query.search.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' },
@@ -197,6 +200,8 @@ export class TasksService {
       }
     }
 
+    if (dto.projectId) await this.assertProjectInOrganization(organizationId, dto.projectId);
+
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
@@ -206,6 +211,7 @@ export class TasksService {
           organizationId,
           creatorId: userId,
           assigneeId: dto.assigneeId ?? null,
+          projectId: dto.projectId ?? null,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         },
         select: {
@@ -219,6 +225,7 @@ export class TasksService {
           updatedAt: true,
           creatorId: true,
           assigneeId: true,
+          projectId: true,
           organizationId: true,
         },
       });
@@ -231,7 +238,7 @@ export class TasksService {
         recipients: [task.assigneeId],
       });
       return task;
-    });
+    }).catch((error: unknown) => this.projectRace(error));
   }
 
   async update(
@@ -249,6 +256,8 @@ export class TasksService {
       }
       throw new ForbiddenException('O responsável precisa pertencer à organização.');
     }
+
+    if (dto.projectId != null) await this.assertProjectInOrganization(organizationId, dto.projectId);
 
     const saved = await this.prisma.$transaction(async (tx) => {
       // Estado anterior para o histórico. Como toda escrita incrementa a versão,
@@ -278,6 +287,7 @@ export class TasksService {
           description: typeof dto.description === 'string' ? dto.description.trim() : dto.description,
           status: dto.status,
           assigneeId: dto.assigneeId,
+          projectId: dto.projectId,
           dueDate: dto.dueDate == null ? dto.dueDate : new Date(dto.dueDate),
           version: { increment: 1 },
         },
@@ -299,7 +309,7 @@ export class TasksService {
         });
       }
       return after;
-    });
+    }).catch((error: unknown) => this.projectRace(error));
 
     if (saved) {
       return saved;
@@ -356,6 +366,25 @@ export class TasksService {
     }
 
     throw new ConflictException('A tarefa não pôde ser excluída. Tente novamente.');
+  }
+
+  /** Projeto excluído entre a validação e a escrita: a chave estrangeira recusa a operação. */
+  private projectRace(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      throw new BadRequestException('O projeto informado não pertence à organização.');
+    }
+    throw error;
+  }
+
+  /** O projeto precisa existir na mesma organização da tarefa. */
+  private async assertProjectInOrganization(organizationId: string, projectId: string): Promise<void> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new BadRequestException('O projeto informado não pertence à organização.');
+    }
   }
 
   private async isAssigneeMember(organizationId: string, userId: string): Promise<boolean> {

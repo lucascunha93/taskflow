@@ -66,6 +66,10 @@ export class ListTasksQueryDto {
   @IsUUID()
   creatorId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
   @Trim()
   @IsOptional()
   @IsString()

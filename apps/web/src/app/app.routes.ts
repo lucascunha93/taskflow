@@ -14,6 +14,8 @@ export const routes: Routes = [
       { path: 'organizations/new', loadComponent: () => import('./features/organizations/create-organization.component').then((m) => m.CreateOrganizationComponent) },
       { path: 'members', loadComponent: () => import('./features/members/members-page.component').then((m) => m.MembersPageComponent) },
       { path: 'tasks', loadComponent: () => import('./features/tasks/tasks-page.component').then((m) => m.TasksPageComponent) },
+      { path: 'projects', loadComponent: () => import('./features/projects/projects-page.component').then((m) => m.ProjectsPageComponent) },
+      { path: 'projects/:projectId', loadComponent: () => import('./features/projects/project-board.component').then((m) => m.ProjectBoardComponent) },
       { path: 'settings', loadComponent: () => import('./features/organizations/organization-settings.component').then((m) => m.OrganizationSettingsComponent) },
       { path: 'profile', loadComponent: () => import('./features/profile/profile-page.component').then((m) => m.ProfilePageComponent) },
     ],

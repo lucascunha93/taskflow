@@ -40,9 +40,12 @@ describe('TasksPageComponent', () => {
     element = fixture.nativeElement as HTMLElement;
   });
   afterEach(() => {
-    // Comentários e histórico são carregados junto e testados em seus próprios specs.
+    // Comentários, histórico e projetos são carregados junto e testados em seus próprios specs.
     for (const request of http.match((req) => req.url.endsWith('/comments') || req.url.endsWith('/activity'))) {
       if (!request.cancelled) request.flush({ data: [], nextCursor: null });
+    }
+    for (const request of http.match((req) => req.url.endsWith('/projects'))) {
+      if (!request.cancelled) request.flush([]);
     }
     fixture.destroy();
     http.verify();

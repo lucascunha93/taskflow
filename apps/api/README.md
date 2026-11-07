@@ -152,6 +152,8 @@ de produção.
 | PATCH, DELETE | `/organizations/:organizationId/tasks/:taskId/comments/:commentId` | JWT |
 | GET | `/organizations/:organizationId/activity` | JWT |
 | GET | `/organizations/:organizationId/tasks/:taskId/activity` | JWT |
+| GET, POST | `/organizations/:organizationId/projects` | JWT |
+| GET, PATCH, DELETE | `/organizations/:organizationId/projects/:projectId` | JWT |
 | GET | `/notifications` | JWT |
 | POST | `/notifications/:notificationId/read`, `/notifications/read-all` | JWT |
 
@@ -272,6 +274,29 @@ operação também é desfeita. Cada item tem `id`, `type` (`TASK_CREATED`,
   histórico da organização do mais recente para o mais antigo; `limit` vai de 1
   a 100. `GET .../tasks/:taskId/activity` (padrão 50) lista o de uma tarefa
   existente. Ambos retornam `{ data, nextCursor }` e exigem associação (404).
+
+### Projetos
+
+Projetos agrupam tarefas de uma organização. Qualquer membro lista e consulta;
+somente OWNER e ADMIN criam, editam e excluem (MEMBER recebe 403). Organização
+inacessível ou projeto de outra organização retornam 404.
+
+- `GET .../projects` lista em ordem de nome, com `id`, `organizationId`,
+  `name`, `description`, `taskCount`, `createdAt` e `updatedAt`.
+- `POST` aceita `{ name, description? }` (nome de 2 a 120 caracteres, único na
+  organização: repetido retorna 409; descrição de até 2000).
+- `PATCH .../projects/:projectId` altera `name` e/ou `description` (`null` ou
+  vazio remove a descrição).
+- `DELETE` responde 204. As tarefas do projeto continuam na organização, com
+  `projectId` nulo (FK `ON DELETE SET NULL`).
+
+Tarefas aceitam `projectId` na criação e na atualização (`null` remove do
+projeto) e retornam `projectId` e `project` (`id`, `name`). Um projeto de outra
+organização ou inexistente retorna 400, inclusive se for excluído durante a
+operação. A listagem aceita o filtro `projectId`, e o histórico registra a
+troca de projeto (`field: "project"`, com nomes). A organização do projeto é
+verificada no serviço, pois o Prisma não permite chave composta em relação
+opcional.
 
 ### Notificações
 

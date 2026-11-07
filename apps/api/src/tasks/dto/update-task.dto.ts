@@ -43,6 +43,11 @@ export class UpdateTaskDto {
     @IsUUID()
     assigneeId?: string | null;
 
+    /** `null` remove a tarefa do projeto. */
+    @IsOptional()
+    @IsUUID()
+    projectId?: string | null;
+
     @IsOptional()
     @IsDateString({ strict: true })
     dueDate?: string | null;

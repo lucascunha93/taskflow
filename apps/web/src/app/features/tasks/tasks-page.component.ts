@@ -7,6 +7,7 @@ import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { debounceTime, map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { MembersService } from '../members/members.service';
+import { ProjectsService } from '../projects/projects.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { CreateTask, TASK_STATUSES, TaskPage, TaskQuery, TaskSort, TaskStatus, UpdateTask, statusLabel } from './task.models';
 import { TaskDetailComponent } from './task-detail.component';
@@ -14,7 +15,7 @@ import { TaskFormComponent } from './task-form.component';
 import { TasksService } from './tasks.service';
 
 const initialQuery = (): TaskQuery => ({
-  page: 1, limit: 20, status: '', assigneeId: '', creatorId: '', search: '',
+  page: 1, limit: 20, status: '', assigneeId: '', creatorId: '', projectId: '', search: '',
   dueDateFrom: '', dueDateTo: '', sortBy: 'updatedAt', sortOrder: 'desc',
 });
 
@@ -39,7 +40,7 @@ const routeFilters = (params: ParamMap): RouteFilters => ({
 @Component({
   selector: 'app-tasks-page',
   imports: [DatePipe, ReactiveFormsModule, RouterLink, TaskDetailComponent, TaskFormComponent],
-  providers: [TasksService, MembersService],
+  providers: [TasksService, MembersService, ProjectsService],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tasks-page.component.html',
   styleUrl: './tasks-page.component.scss',
@@ -47,6 +48,7 @@ const routeFilters = (params: ParamMap): RouteFilters => ({
 export class TasksPageComponent {
   protected readonly organizations = inject(OrganizationsService);
   protected readonly members = inject(MembersService);
+  protected readonly projects = inject(ProjectsService);
   private readonly api = inject(TasksService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
@@ -101,6 +103,7 @@ export class TasksPageComponent {
     status: this.fb.control<TaskStatus | ''>(''),
     assigneeId: [''],
     creatorId: [''],
+    projectId: [''],
     dueDateFrom: [''],
     dueDateTo: [''],
     sortBy: this.fb.control<TaskSort>('updatedAt'),
@@ -124,7 +127,7 @@ export class TasksPageComponent {
       const fromRoute = this.filterParams();
       const assigneeId = fromRoute.mine ? untracked(() => this.auth.user()?.id) ?? '' : '';
       this.filters.reset({
-        search: fromRoute.search, status: '', assigneeId, creatorId: '', dueDateFrom: '', dueDateTo: '',
+        search: fromRoute.search, status: '', assigneeId, creatorId: '', projectId: '', dueDateFrom: '', dueDateTo: '',
         sortBy: 'updatedAt', sortOrder: 'desc', limit: 20,
       }, { emitEvent: false });
       this.query.set({ ...initialQuery(), search: fromRoute.search, assigneeId });

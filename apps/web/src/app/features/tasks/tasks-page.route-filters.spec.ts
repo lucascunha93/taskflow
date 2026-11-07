@@ -37,7 +37,12 @@ describe('TasksPageComponent route filters', () => {
     return fixture;
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    for (const request of http.match((req) => req.url.endsWith('/projects'))) {
+      if (!request.cancelled) request.flush([]);
+    }
+    http.verify();
+  });
 
   it('lists the tasks assigned to the authenticated user for ?assignee=me', async () => {
     const fixture = await create({ assignee: 'me' });

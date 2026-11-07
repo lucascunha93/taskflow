@@ -49,6 +49,19 @@
       </div>
     </div>
     <div class="field">
+      <label for="task-project">Projeto <span>(opcional)</span></label>
+      <select id="task-project" class="tf-field" formControlName="projectId">
+        <option value="">Sem projeto</option>
+        @if (task()?.project; as current) {
+          @if (!hasProject(current.id)) { <option [value]="current.id">{{ current.name }} (atual)</option> }
+        }
+        @for (project of projects.projects(); track project.id) {
+          <option [value]="project.id">{{ project.name }}</option>
+        }
+      </select>
+      @if (projects.status() === 'error') { <p class="hint">Não foi possível carregar os projetos.</p> }
+    </div>
+    <div class="field">
       <label for="task-due">Vencimento <span>(opcional, horário local)</span></label>
       <input id="task-due" class="tf-field" type="datetime-local" formControlName="dueDate"
         [attr.aria-invalid]="form.controls.dueDate.touched && form.controls.dueDate.invalid"

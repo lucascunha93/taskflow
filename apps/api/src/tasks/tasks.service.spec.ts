@@ -11,6 +11,7 @@ describe('TasksService', () => {
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     membership: { findUnique: ReturnType<typeof vi.fn> };
+    project: { findFirst: ReturnType<typeof vi.fn> };
     task: {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
@@ -34,6 +35,7 @@ describe('TasksService', () => {
       $transaction: vi.fn((operations: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
         typeof operations === 'function' ? operations(prisma) : Promise.all(operations)),
       membership: { findUnique: vi.fn() },
+      project: { findFirst: vi.fn() },
       task: {
         create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(),
         deleteMany: vi.fn(), updateManyAndReturn: vi.fn(),
@@ -76,7 +78,7 @@ describe('TasksService', () => {
     expect(prisma.task.create).toHaveBeenCalledWith(expect.objectContaining({
       data: {
         title: 'Task', description: 'Details', organizationId, creatorId: userId,
-        assigneeId: 'member', dueDate: new Date('2026-10-30'),
+        assigneeId: 'member', projectId: null, dueDate: new Date('2026-10-30'),
       },
     }));
   });
@@ -114,7 +116,7 @@ describe('TasksService', () => {
     expect(prisma.task.findMany).toHaveBeenCalledWith({
       where: {
         organizationId, organization: { memberships: { some: { userId } } },
-        status: undefined, assigneeId: undefined, creatorId: undefined, title: undefined, dueDate: undefined,
+        status: undefined, assigneeId: undefined, creatorId: undefined, projectId: undefined, title: undefined, dueDate: undefined,
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       skip: 0,
@@ -122,9 +124,10 @@ describe('TasksService', () => {
       select: {
         id: true, title: true, description: true, status: true, version: true,
         dueDate: true, createdAt: true, updatedAt: true, creatorId: true,
-        assigneeId: true, organizationId: true,
+        assigneeId: true, projectId: true, organizationId: true,
         creator: { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
       },
     });
     expect(prisma.task.count).toHaveBeenCalledWith({
@@ -253,6 +256,27 @@ describe('TasksService', () => {
         { field: 'dueDate', from: null, to: '2026-10-30T00:00:00.000Z' },
       ],
     });
+  });
+
+  it('accepts only projects of the same organization and records project changes', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.project.findFirst.mockResolvedValueOnce(null);
+    await expect(service.create(organizationId, userId, { title: 'Task', projectId: 'foreign' }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(prisma.project.findFirst).toHaveBeenCalledWith({ where: { id: 'foreign', organizationId }, select: { id: true } });
+    expect(prisma.task.create).not.toHaveBeenCalled();
+
+    const task = { id: 'task-a', organizationId, version: 1, title: 'T', description: null, status: 'TODO', dueDate: null, assignee: null, project: null };
+    prisma.project.findFirst.mockResolvedValueOnce({ id: 'p1' });
+    prisma.task.findFirst.mockResolvedValue(task);
+    prisma.task.updateManyAndReturn.mockResolvedValue([{ ...task, version: 2, project: { id: 'p1', name: 'Site' } }]);
+    await service.update(organizationId, 'task-a', userId, { version: 1, projectId: 'p1' });
+    expect(prisma.task.updateManyAndReturn).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ projectId: 'p1' }),
+    }));
+    expect(activity.record).toHaveBeenCalledWith(prisma, expect.objectContaining({
+      changes: [{ field: 'project', from: null, to: 'Site' }],
+    }));
   });
 
   it('notifies the assignee of a new task unless they created it', async () => {

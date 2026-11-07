@@ -14,6 +14,10 @@ não está configurada.
   membros com verificação de permissões.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
   com validação de associação, controle de versão, filtros e paginação.
+- Comentários, histórico de alterações, notificações no app e projetos com
+  quadro por status.
+- Sessão com access token em memória e refresh token rotativo em cookie
+  `HttpOnly`.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
 - Validação de variáveis de ambiente, Helmet, CORS opt-in e rate limiting em
   login e cadastro.

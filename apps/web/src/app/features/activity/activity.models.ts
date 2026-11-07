@@ -1,7 +1,7 @@
 import { TaskStatus, statusLabel } from '../tasks/task.models';
 
 export type ActivityType = 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED' | 'COMMENT_ADDED';
-export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate';
+export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project';
 
 export interface ActivityChange {
   field: ChangedField;
@@ -25,7 +25,7 @@ export interface ActivityPage {
 }
 
 const TYPES: readonly ActivityType[] = ['TASK_CREATED', 'TASK_UPDATED', 'TASK_DELETED', 'COMMENT_ADDED'];
-const FIELDS: readonly ChangedField[] = ['title', 'description', 'status', 'assignee', 'dueDate'];
+const FIELDS: readonly ChangedField[] = ['title', 'description', 'status', 'assignee', 'dueDate', 'project'];
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isNullableText = (value: unknown): value is string | null => value === null || typeof value === 'string';
@@ -64,10 +64,12 @@ export function activityPageFromResponse(value: unknown): ActivityPage {
 
 const FIELD_LABELS: Readonly<Record<ChangedField, string>> = {
   title: 'o título', description: 'a descrição', status: 'o status', assignee: 'o responsável', dueDate: 'o prazo',
+  project: 'o projeto',
 };
 
 function valueLabel(field: ChangedField, value: string | null): string {
   if (field === 'assignee') return value ?? 'sem responsável';
+  if (field === 'project') return value ?? 'sem projeto';
   if (field === 'dueDate') {
     return value === null ? 'sem prazo' : new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   }
