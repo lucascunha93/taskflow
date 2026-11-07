@@ -1,10 +1,11 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { debounceTime } from 'rxjs';
+import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
+import { debounceTime, map } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
 import { MembersService } from '../members/members.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { CreateTask, TASK_STATUSES, TaskPage, TaskQuery, TaskSort, TaskStatus, UpdateTask, statusLabel } from './task.models';
@@ -15,6 +16,17 @@ import { TasksService } from './tasks.service';
 const initialQuery = (): TaskQuery => ({
   page: 1, limit: 20, status: '', assigneeId: '', creatorId: '', search: '',
   dueDateFrom: '', dueDateTo: '', sortBy: 'updatedAt', sortOrder: 'desc',
+});
+
+/** Filtros iniciais aceitos pela URL: `?assignee=me` e `?search=texto`. */
+interface RouteFilters {
+  mine: boolean;
+  search: string;
+}
+
+const routeFilters = (params: ParamMap): RouteFilters => ({
+  mine: params.get('assignee') === 'me',
+  search: (params.get('search') ?? '').trim().slice(0, 200),
 });
 
 @Component({
@@ -29,9 +41,15 @@ export class TasksPageComponent {
   protected readonly organizations = inject(OrganizationsService);
   protected readonly members = inject(MembersService);
   private readonly api = inject(TasksService);
+  private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(FormBuilder).nonNullable;
   private readonly activeId = computed(() => this.organizations.active()?.id ?? null);
+  private readonly routeFilters = toSignal(this.route.queryParamMap.pipe(map(routeFilters)), {
+    initialValue: routeFilters(this.route.snapshot.queryParamMap),
+  });
+  protected readonly mine = computed(() => this.routeFilters().mine);
   private readonly contextId = signal<string | null>(null);
   private readonly query = signal<TaskQuery>(initialQuery());
   private readonly reload = signal(0);
@@ -89,11 +107,13 @@ export class TasksPageComponent {
 
     effect(() => {
       this.activeId();
+      const fromRoute = this.routeFilters();
+      const assigneeId = fromRoute.mine ? untracked(() => this.auth.user()?.id) ?? '' : '';
       this.filters.reset({
-        search: '', status: '', assigneeId: '', creatorId: '', dueDateFrom: '', dueDateTo: '',
+        search: fromRoute.search, status: '', assigneeId, creatorId: '', dueDateFrom: '', dueDateTo: '',
         sortBy: 'updatedAt', sortOrder: 'desc', limit: 20,
       }, { emitEvent: false });
-      this.query.set(initialQuery());
+      this.query.set({ ...initialQuery(), search: fromRoute.search, assigneeId });
       this.filterError.set('');
       this.creating.set(false);
       this.createBusy.set(false);

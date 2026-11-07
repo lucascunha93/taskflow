@@ -8,17 +8,16 @@
         <span>Dashboard</span>
       </a>
     </li>
-    @for (item of workspaceItems; track item.label) {
-      <li>
-        <button type="button" class="nav-item" disabled title="Disponível em uma próxima etapa">
-          <app-icon [name]="item.icon" />
-          <span>{{ item.label }}</span>
-        </button>
-      </li>
-    }
     <li>
-      <a class="nav-item" routerLink="/tasks" routerLinkActive="nav-item--active" ariaCurrentWhenActive="page"
-        (click)="navigated.emit()">
+      <a class="nav-item" routerLink="/tasks" [queryParams]="{ assignee: 'me' }" routerLinkActive="nav-item--active"
+        [routerLinkActiveOptions]="exactMatch" ariaCurrentWhenActive="page" (click)="navigated.emit()">
+        <app-icon name="my-tasks" />
+        <span>Minhas tarefas</span>
+      </a>
+    </li>
+    <li>
+      <a class="nav-item" routerLink="/tasks" routerLinkActive="nav-item--active" [routerLinkActiveOptions]="exactMatch"
+        ariaCurrentWhenActive="page" (click)="navigated.emit()">
         <app-icon name="tasks" />
         <span>Todas as tarefas</span>
       </a>

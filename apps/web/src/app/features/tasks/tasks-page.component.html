@@ -1,7 +1,7 @@
 <section class="page">
   <p class="eyebrow">ESPAÇO DE TRABALHO</p>
   <div class="page-heading">
-    <div><h1>Tarefas</h1>@if (organizations.active(); as organization) { <p class="description">{{ organization.name }}</p> }</div>
+    <div><h1>{{ mine() ? 'Minhas tarefas' : 'Tarefas' }}</h1>@if (organizations.active(); as organization) { <p class="description">{{ organization.name }}</p> }</div>
     @if (organizations.active() && !creating() && !selected()) {
       <button type="button" class="tf-button" (click)="notice.set(''); creating.set(true)">Nova tarefa</button>
     }

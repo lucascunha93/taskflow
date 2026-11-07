@@ -18,11 +18,11 @@
     </div>
   </div>
   <div class="header-actions">
-    <div class="search">
+    <form class="search" role="search" (submit)="$event.preventDefault(); submitSearch()">
       <app-icon name="search" />
-      <input class="tf-field" type="search" aria-label="Busca ainda não disponível"
-        placeholder="Buscar" disabled />
-    </div>
+      <input class="tf-field" type="search" aria-label="Buscar tarefas pelo título"
+        placeholder="Buscar tarefas" maxlength="200" [formControl]="search" />
+    </form>
     <details #profileMenu class="profile-menu">
       <summary class="header-profile" aria-label="Menu de perfil de {{ user().name }}">
         <span class="tf-avatar" aria-hidden="true">{{ user().name.slice(0, 1).toUpperCase() }}</span>

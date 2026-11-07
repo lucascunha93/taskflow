@@ -1,11 +1,6 @@
 import { ChangeDetectionStrategy, Component, output } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
-import { IconComponent, type IconName } from '../../../shared/icon/icon.component';
-
-interface NavigationItem {
-  label: string;
-  icon: IconName;
-}
+import { IsActiveMatchOptions, RouterLink, RouterLinkActive } from '@angular/router';
+import { IconComponent } from '../../../shared/icon/icon.component';
 
 @Component({
   selector: 'app-navigation',
@@ -16,7 +11,8 @@ interface NavigationItem {
 })
 export class NavigationComponent {
   readonly navigated = output<void>();
-  protected readonly workspaceItems: readonly NavigationItem[] = [
-    { label: 'Minhas tarefas', icon: 'my-tasks' },
-  ];
+  /** "Minhas tarefas" e "Todas as tarefas" compartilham /tasks e se distinguem pela query. */
+  protected readonly exactMatch: IsActiveMatchOptions = {
+    paths: 'exact', queryParams: 'exact', matrixParams: 'ignored', fragment: 'ignored',
+  };
 }

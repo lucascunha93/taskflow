@@ -17,7 +17,6 @@ export class MainLayoutComponent {
   private readonly router = inject(Router);
   private readonly organizations = inject(OrganizationsService);
   protected readonly menuOpen = signal(false);
-  protected readonly pageActive = signal(false);
   private readonly header = viewChild(HeaderComponent);
 
   constructor() {

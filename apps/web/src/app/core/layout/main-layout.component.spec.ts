@@ -13,7 +13,7 @@ describe('MainLayoutComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MainLayoutComponent],
       providers: [
-        provideRouter([{ path: 'test', component: TestPageComponent }]),
+        provideRouter([{ path: 'test', component: TestPageComponent }, { path: 'tasks', component: TestPageComponent }]),
         { provide: AuthService, useValue: {
           user: signal({ id: 'user-id', name: 'Pessoa Teste', email: 'pessoa@example.test', createdAt: '2026-01-01T00:00:00.000Z' }),
           status: signal('authenticated'),
@@ -27,20 +27,43 @@ describe('MainLayoutComponent', () => {
     }).compileComponents();
   });
 
-  it('shows the authenticated user and keeps unavailable navigation and search disabled', async () => {
+  it('shows the authenticated user and links every navigation item to a real page', async () => {
     const fixture = TestBed.createComponent(MainLayoutComponent);
     await fixture.whenStable();
     const element = fixture.nativeElement as HTMLElement;
     expect(element.textContent).toContain('Pessoa Teste');
     expect(element.textContent).toContain('pessoa@example.test');
-    expect(element.textContent).toContain('prévia do layout');
+    expect(element.textContent).not.toContain('prévia do layout');
     expect(element.querySelector<HTMLAnchorElement>('.skip-link')?.getAttribute('href')).toBe('#main-content');
-    const navButtons = element.querySelectorAll<HTMLButtonElement>('nav button');
-    expect(Array.from(navButtons, (button) => button.textContent?.trim())).toEqual(['Minhas tarefas']);
-    expect(Array.from(navButtons).every((button) => button.disabled)).toBe(true);
+    expect(element.querySelectorAll('nav button')).toHaveLength(0);
     expect(Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a'), (link) => link.getAttribute('href')))
-      .toEqual(['/', '/tasks', '/members', '/settings']);
-    expect(element.querySelector<HTMLInputElement>('input[type="search"]')?.disabled).toBe(true);
+      .toEqual(['/', '/tasks?assignee=me', '/tasks', '/members', '/settings']);
+  });
+
+  it('marks only the matching task link as active', async () => {
+    const fixture = TestBed.createComponent(MainLayoutComponent);
+    await TestBed.inject(Router).navigateByUrl('/tasks?assignee=me');
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const current = Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a[aria-current="page"]'));
+    expect(current.map((link) => link.textContent?.trim())).toEqual(['Minhas tarefas']);
+  });
+
+  it('submits the header search to the task list and clears the field', async () => {
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(MainLayoutComponent);
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const field = element.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!field) throw new Error('Search field not found');
+    expect(field.disabled).toBe(false);
+    field.value = '  relatório  ';
+    field.dispatchEvent(new Event('input'));
+    field.form?.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(navigate).toHaveBeenCalledWith(['/tasks'], { queryParams: { search: 'relatório' } });
+    await fixture.whenStable();
+    expect(field.value).toBe('');
   });
 
   it('toggles mobile navigation and closes it with Escape, returning focus', async () => {
