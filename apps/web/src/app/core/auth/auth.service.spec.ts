@@ -232,4 +232,43 @@ describe('AuthService and interceptor', () => {
     await expect(result).rejects.toThrow();
     expect(auth.user()).toBeNull();
   });
+
+  it('changes the password and switches to the returned token without ending the session', async () => {
+    await login();
+    const result = firstValueFrom(auth.changePassword('old-password-123', 'new-password-123'), { defaultValue: undefined });
+    const request = http.expectOne('/api/auth/me/password');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`);
+    expect(request.request.body).toEqual({ currentPassword: 'old-password-123', newPassword: 'new-password-123' });
+    request.flush({ ...loginResponse, accessToken: 'rotated-token' });
+    await result;
+    expect(auth.getToken()).toBe('rotated-token');
+    expect(sessionStorage.getItem('taskflow.accessToken')).toBe('rotated-token');
+    expect(auth.status()).toBe('authenticated');
+  });
+
+  it('keeps the current token when the password change fails or returns another user', async () => {
+    await login();
+    const failed = firstValueFrom(auth.changePassword('wrong-password', 'new-password-123'), { defaultValue: undefined });
+    http.expectOne('/api/auth/me/password').flush({}, { status: 403, statusText: 'Forbidden' });
+    await expect(failed).rejects.toMatchObject({ status: 403 });
+    expect(auth.status()).toBe('authenticated');
+    const mismatched = firstValueFrom(auth.changePassword('old-password-123', 'new-password-123'), { defaultValue: undefined });
+    http.expectOne('/api/auth/me/password').flush({ ...loginResponse, accessToken: 'other', user: { ...loginResponse.user, id: 'other-id' } });
+    await expect(mismatched).rejects.toThrow();
+    expect(auth.getToken()).toBe(fakeToken);
+  });
+
+  it('revokes all sessions on the API and then clears the local session', async () => {
+    await login();
+    const result = firstValueFrom(auth.revokeAllSessions(), { defaultValue: undefined });
+    const request = http.expectOne('/api/auth/me/sessions');
+    expect(request.request.method).toBe('DELETE');
+    expect(auth.status()).toBe('authenticated');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    await result;
+    expect(auth.status()).toBe('unauthenticated');
+    expect(auth.getToken()).toBeNull();
+    expect(sessionStorage.getItem('taskflow.accessToken')).toBeNull();
+  });
 });

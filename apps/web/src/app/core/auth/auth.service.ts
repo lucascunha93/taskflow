@@ -181,6 +181,45 @@ export class AuthService {
     );
   }
 
+  /**
+   * Troca a senha. A API revoga todos os tokens anteriores e devolve um novo
+   * token, que passa a ser usado por esta sessão.
+   */
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    const generation = this.generation;
+    const userId = this.userState()?.id;
+    if (!userId || this.statusState() !== 'authenticated') {
+      return throwError(() => new Error('Não há uma sessão válida para trocar a senha.'));
+    }
+    return this.http.put<unknown>(`${this.baseUrl}/auth/me/password`, { currentPassword, newPassword }).pipe(
+      map((response) => {
+        if (generation !== this.generation || this.userState()?.id !== userId ||
+          !isLoginResponse(response) || response.user.id !== userId) {
+          throw new Error('A sessão mudou durante a troca de senha.');
+        }
+        this.token = response.accessToken;
+        try {
+          this.storage().setItem(STORAGE_KEY, response.accessToken);
+        } catch {
+          // O novo token continua em memória; ao recarregar, será necessário entrar novamente.
+        }
+      }),
+    );
+  }
+
+  /** Encerra todas as sessões do usuário na API, inclusive esta, e limpa a sessão local. */
+  revokeAllSessions(): Observable<void> {
+    const generation = this.generation;
+    if (this.statusState() !== 'authenticated') {
+      return throwError(() => new Error('Não há uma sessão válida para encerrar.'));
+    }
+    return this.http.delete<void>(`${this.baseUrl}/auth/me/sessions`).pipe(
+      map(() => {
+        if (generation === this.generation) this.clearSession(false);
+      }),
+    );
+  }
+
   logout(): void {
     this.clearSession(false);
   }

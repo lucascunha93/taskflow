@@ -34,11 +34,14 @@ uma cópia inicial do armazenamento. Evite registrar tokens e considere CSP,
 proteções contra XSS e a evolução para cookies `HttpOnly`, `Secure` e `SameSite`
 antes da publicação, avaliando também CSRF.
 
-O backend atual emite tokens com duração de 15 minutos, sem refresh ou
-revogação. O logout remove a sessão local, mas não invalida um token já emitido
-no servidor; ele permanece válido até expirar. A expiração é detectada ao
-validar ou fazer uma requisição protegida. Respostas 401 dessas requisições
-encerram a sessão e direcionam para o login.
+O backend emite tokens com duração de 15 minutos, sem refresh. O botão Sair
+remove apenas a sessão local; o token emitido continua válido até expirar ou até
+uma revogação. Para invalidá-lo no servidor, o perfil oferece "Encerrar todas as
+sessões", que encerra também as outras sessões do usuário. A expiração ou a
+revogação é detectada ao validar a sessão ou fazer uma requisição protegida:
+respostas 401 encerram a sessão e direcionam para o login. Login e cadastro
+informam quando a API recusa tentativas em excesso (429), seja pelo limite por
+IP, seja pelo bloqueio temporário da conta.
 
 ## Organizações
 
@@ -80,8 +83,14 @@ continua sendo responsabilidade do backend.
 
 Em `/profile`, o usuário consulta e-mail e data de cadastro, vê o papel em cada
 organização e altera o nome de exibição por `PATCH /auth/me`. O nome atualizado
-passa a ser exibido no cabeçalho e na sidebar. O e-mail não pode ser alterado e
-ainda não há troca de senha.
+passa a ser exibido no cabeçalho e na sidebar. O e-mail não pode ser alterado.
+
+A troca de senha pede a senha atual e a confirmação da nova. A API revoga os
+tokens anteriores e devolve um novo, que a aba passa a usar; as outras sessões
+são encerradas. Se a resposta se perder, a troca pode ter sido aplicada: a
+próxima requisição com o token antigo recebe 401 e leva ao login. "Encerrar
+todas as sessões" pede confirmação, chama `DELETE /auth/me/sessions`, limpa a
+sessão local e abre o login com um aviso.
 
 ## Configurações da organização
 

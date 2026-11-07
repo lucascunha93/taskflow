@@ -9,13 +9,15 @@ import { AuthService } from '../../core/auth/auth.service';
 import { trimmedName } from '../../shared/validators/trimmed-name.validator';
 import { ROLE_LABELS } from '../organizations/organization.models';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { ChangePasswordComponent } from './change-password.component';
+import { EndSessionsComponent } from './end-sessions.component';
 
 @Component({
   selector: 'app-profile-page',
-  imports: [DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [ChangePasswordComponent, DatePipe, EndSessionsComponent, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile-page.component.html',
-  styleUrl: './profile-page.component.scss',
+  styleUrls: ['./profile-form.scss', './profile-page.component.scss'],
 })
 export class ProfilePageComponent {
   protected readonly auth = inject(AuthService);

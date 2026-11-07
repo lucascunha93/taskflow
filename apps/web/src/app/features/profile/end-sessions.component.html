@@ -1,0 +1,21 @@
+<section class="profile-section" aria-labelledby="sessions-title">
+  <h2 id="sessions-title">Sessões</h2>
+  <p class="hint">
+    Use se você entrou em um computador compartilhado ou suspeita de acesso indevido. Todas as sessões,
+    inclusive esta, serão encerradas imediatamente.
+  </p>
+  @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
+  @if (confirming()) {
+    <p role="status"><strong>Encerrar todas as sessões agora?</strong> Você precisará entrar novamente.</p>
+    <div class="actions">
+      <button type="button" class="tf-button tf-button--danger" [disabled]="busy()" (click)="endAll()">
+        {{ busy() ? 'Encerrando…' : 'Encerrar todas as sessões' }}
+      </button>
+      <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirming.set(false)">Cancelar</button>
+    </div>
+  } @else {
+    <div class="actions">
+      <button type="button" class="tf-button tf-button--subtle" (click)="error.set(''); confirming.set(true)">Encerrar todas as sessões…</button>
+    </div>
+  }
+</section>

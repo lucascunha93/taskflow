@@ -48,7 +48,7 @@ export class RegisterComponent {
         error instanceof HttpErrorResponse && error.status === 409
           ? 'Este e-mail já está cadastrado.'
           : error instanceof HttpErrorResponse && error.status === 429
-          ? 'Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente.'
+          ? 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'
           : 'Não foi possível criar a conta. Verifique sua conexão e tente novamente.',
       ),
     });

@@ -19,7 +19,9 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
-  protected readonly registered = inject(ActivatedRoute).snapshot.queryParamMap.get('registered') === '1';
+  private readonly query = inject(ActivatedRoute).snapshot.queryParamMap;
+  protected readonly registered = this.query.get('registered') === '1';
+  protected readonly sessionsEnded = this.query.get('sessions') === 'ended';
   protected readonly loading = signal(false);
   protected readonly error = signal('');
   protected readonly form = this.fb.group({
@@ -47,7 +49,7 @@ export class LoginComponent {
           : error instanceof HttpErrorResponse && error.status === 401
           ? 'E-mail ou senha inválidos.'
           : error instanceof HttpErrorResponse && error.status === 429
-          ? 'Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente.'
+          ? 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'
           : 'Não foi possível entrar. Verifique sua conexão e tente novamente.',
       ),
     });

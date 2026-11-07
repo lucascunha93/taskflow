@@ -31,6 +31,8 @@
       </form>
     </section>
 
+    <app-change-password />
+
     <section class="profile-section" aria-labelledby="organizations-title">
       <h2 id="organizations-title">Organizações</h2>
       @if (organizations.status() === 'ready') {
@@ -51,5 +53,7 @@
         <p role="status">Carregando organizações…</p>
       }
     </section>
+
+    <app-end-sessions />
   }
 </section>

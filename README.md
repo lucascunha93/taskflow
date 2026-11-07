@@ -8,6 +8,8 @@ não está configurada.
 ## Estado atual
 
 - Cadastro, login com Argon2id e JWT, perfil autenticado e alteração do nome.
+- Troca de senha, encerramento de todas as sessões (revogação de JWT por versão
+  de sessão) e bloqueio temporário da conta após falhas seguidas de login.
 - Criação, listagem e renomeação de organizações; inclusão e listagem de
   membros com verificação de permissões.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,

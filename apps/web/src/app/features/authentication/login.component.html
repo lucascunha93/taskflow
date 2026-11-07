@@ -7,6 +7,8 @@
       <p class="message message--info" role="status">Sua sessão expirou. Entre novamente para continuar.</p>
     } @else if (registered) {
       <p class="message message--info" role="status">Conta criada. Entre com seu e-mail e senha.</p>
+    } @else if (sessionsEnded) {
+      <p class="message message--info" role="status">Todas as sessões foram encerradas. Entre novamente para continuar.</p>
     }
     @if (error()) { <p class="message" role="alert">{{ error() }}</p> }
     <div class="field">
