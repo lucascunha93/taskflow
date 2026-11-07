@@ -10,6 +10,7 @@ import { HealthController } from './health/health.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { TasksModule } from './tasks/tasks.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TasksModule } from './tasks/tasks.module.js';
     ObserveModule.forRoot(observeOptions(process.env)),
     OrganizationsModule,
     TasksModule,
+    NotificationsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

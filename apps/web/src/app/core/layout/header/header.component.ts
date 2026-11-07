@@ -3,10 +3,11 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../../shared/icon/icon.component';
 import { AuthUser } from '../../auth/auth.models';
+import { NotificationsMenuComponent } from '../../../features/notifications/notifications-menu.component';
 
 @Component({
   selector: 'app-header',
-  imports: [IconComponent, ReactiveFormsModule, RouterLink],
+  imports: [IconComponent, NotificationsMenuComponent, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss',

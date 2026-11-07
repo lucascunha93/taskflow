@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, HostListener, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HeaderComponent } from './header/header.component';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { OrganizationsService } from '../../features/organizations/organizations.service';
+import { NotificationsService } from '../../features/notifications/notifications.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -21,6 +22,9 @@ export class MainLayoutComponent {
 
   constructor() {
     this.organizations.load();
+    const notifications = inject(NotificationsService);
+    notifications.start();
+    inject(DestroyRef).onDestroy(() => notifications.stop());
   }
 
   protected toggleMenu(): void {

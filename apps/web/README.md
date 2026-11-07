@@ -126,6 +126,17 @@ atividades de tarefas excluídas aparecem apenas como texto. "Atualizar" recarre
 o histórico; o dashboard também o recarrega após uma alteração feita pelo
 detalhe.
 
+## Notificações
+
+O sino do cabeçalho mostra a quantidade de notificações não lidas e um painel
+com as 20 mais recentes: atribuições e comentários em tarefas suas. A lista é
+consultada ao abrir a aplicação, a cada minuto com a aba visível, ao voltar para
+a aba e ao abrir o painel; não há atualização em tempo real. Abrir uma
+notificação a marca como lida e abre a tarefa em `/tasks?task=<id>`, trocando
+a organização ativa quando necessário. Tarefas excluídas aparecem só como texto.
+"Marcar todas como lidas" atualiza todas de uma vez. Sair da sessão limpa a
+lista.
+
 ## Membros
 
 Em `/members`, a aplicação consulta `GET /organizations/:organizationId/members`
@@ -144,7 +155,8 @@ cancelada no navegador ainda pode ter sido processada pelo servidor.
 
 ## Tarefas
 
-Em `/tasks`, a organização ativa determina todas as operações. A página consulta
+Em `/tasks`, a organização ativa determina todas as operações. `?task=<id>`
+abre o detalhe de uma tarefa; o parâmetro é removido ao fechar. A página consulta
 o resultado paginado da API, permite buscar por título, filtrar por status,
 responsável, criador e período de vencimento e escolher ordenação e tamanho da
 página. A pesquisa e os filtros aguardam 300 ms antes da consulta e reiniciam a
@@ -195,7 +207,8 @@ A aplicação disponibiliza a URL pelo token `API_BASE_URL` em
   proxy. O proxy da CLI encaminha `/auth`, `/organizations` e os
   endpoints de membros e tarefas para `http://localhost:3000`, preservando
   a rota Angular `/organizations/new`. `PATCH /organizations/:id` é
-  encaminhado somente quando o ID tem formato UUID. Inicie a API separadamente.
+  encaminhado somente quando o ID tem formato UUID. Atividade, projetos e
+  `/notifications` também são encaminhados. Inicie a API separadamente.
 - `src/environments/environment.ts`: produção, por padrão vazio, representando
   a mesma origem da aplicação. O servidor de produção deve encaminhar as rotas
   da API para o backend, ou a URL deve ser configurada antes do build.

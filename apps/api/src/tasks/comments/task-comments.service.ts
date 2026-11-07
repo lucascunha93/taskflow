@@ -7,6 +7,7 @@ import {
 import type { MembershipRole, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ActivityService } from '../../activity/activity.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
 import { CommentBodyDto, ListCommentsQueryDto } from './dto/comment.dto.js';
 
 export const commentSelect = {
@@ -29,6 +30,7 @@ export class TaskCommentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(organizationId: string, taskId: string, userId: string, query: ListCommentsQueryDto) {
@@ -63,7 +65,7 @@ export class TaskCommentsService {
     userId: string,
     dto: CommentBodyDto,
   ): Promise<CommentDetails> {
-    const { title } = await this.assertTaskAccess(organizationId, taskId, userId);
+    const { title, creatorId, assigneeId } = await this.assertTaskAccess(organizationId, taskId, userId);
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.taskComment.create({
         data: { organizationId, taskId, authorId: userId, body: dto.body.trim() },
@@ -71,6 +73,10 @@ export class TaskCommentsService {
       });
       await this.activity.record(tx, {
         organizationId, taskId, taskTitle: title, actorId: userId, type: 'COMMENT_ADDED',
+      });
+      await this.notifications.notify(tx, {
+        organizationId, taskId, taskTitle: title, actorId: userId, type: 'TASK_COMMENTED',
+        recipients: [creatorId, assigneeId],
       });
       return comment;
     });
@@ -117,7 +123,7 @@ export class TaskCommentsService {
     organizationId: string,
     taskId: string,
     userId: string,
-  ): Promise<{ role: MembershipRole; title: string }> {
+  ): Promise<{ role: MembershipRole; title: string; creatorId: string; assigneeId: string | null }> {
     const membership = await this.prisma.membership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
       select: { role: true },
@@ -127,12 +133,12 @@ export class TaskCommentsService {
     }
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, organizationId },
-      select: { title: true },
+      select: { title: true, creatorId: true, assigneeId: true },
     });
     if (!task) {
       throw new NotFoundException('Tarefa não encontrada.');
     }
-    return { role: membership.role, title: task.title };
+    return { role: membership.role, ...task };
   }
 
   private async findComment(organizationId: string, taskId: string, commentId: string): Promise<void> {

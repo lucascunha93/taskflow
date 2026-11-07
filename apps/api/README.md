@@ -152,6 +152,8 @@ de produção.
 | PATCH, DELETE | `/organizations/:organizationId/tasks/:taskId/comments/:commentId` | JWT |
 | GET | `/organizations/:organizationId/activity` | JWT |
 | GET | `/organizations/:organizationId/tasks/:taskId/activity` | JWT |
+| GET | `/notifications` | JWT |
+| POST | `/notifications/:notificationId/read`, `/notifications/read-all` | JWT |
 
 ### Refresh token
 
@@ -270,6 +272,27 @@ operação também é desfeita. Cada item tem `id`, `type` (`TASK_CREATED`,
   histórico da organização do mais recente para o mais antigo; `limit` vai de 1
   a 100. `GET .../tasks/:taskId/activity` (padrão 50) lista o de uma tarefa
   existente. Ambos retornam `{ data, nextCursor }` e exigem associação (404).
+
+### Notificações
+
+Notificações no app são gravadas na mesma transação do evento:
+
+- `TASK_ASSIGNED`: o responsável definido na criação ou na troca de
+  responsável.
+- `TASK_COMMENTED`: o criador e o responsável da tarefa quando alguém comenta.
+
+Quem realizou a ação nunca é notificado, e cada pessoa recebe no máximo uma
+notificação por evento. Não há envio por e-mail nem em tempo real.
+
+- `GET /notifications?limit=20&before=<id>&unread=true` lista as notificações do
+  usuário do JWT, das mais recentes para as mais antigas (`limit` de 1 a 50),
+  com `{ data, nextCursor, unreadCount }`. Cada item tem `id`, `type`,
+  `organizationId`, `organization` (`id`, `name`), `taskId` (`null` se a tarefa
+  foi excluída), `taskTitle`, `readAt`, `createdAt` e `actor`.
+- Somente notificações de organizações das quais o usuário ainda participa são
+  listadas, contadas ou alteradas.
+- `POST /notifications/:id/read` marca uma como lida (204, idempotente; 404 se
+  não pertencer ao usuário). `POST /notifications/read-all` marca todas.
 
 ### Resumo para o dashboard
 

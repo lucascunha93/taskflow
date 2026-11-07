@@ -131,6 +131,7 @@ describe('Task updates (HTTP with Prisma stub)', () => {
       .useValue({
         $transaction(callback: (tx: unknown) => Promise<unknown>) { return callback(this); },
         taskActivity: { create: vi.fn().mockResolvedValue({}) },
+        notification: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
         membership: { findUnique: findMembership },
         user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },
         task: { findFirst, updateManyAndReturn },

@@ -17,7 +17,7 @@
       </section>
     } @else if (selected(); as current) {
       @if (current.organizationId === organization.id) {
-        <app-task-detail [taskId]="current.id" (closed)="selected.set(null)" (changed)="changed($event)" />
+        <app-task-detail [taskId]="current.id" (closed)="closeDetail()" (changed)="changed($event)" />
       }
     } @else {
       @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }

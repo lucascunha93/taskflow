@@ -357,6 +357,48 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     expect(older.body.data[0].id).toBe(feed.body.data[1].id);
   });
 
+  it('notifies assignees and task participants, never the actor, and only while they are members', async () => {
+    const notified = await register('notified');
+    await request(app.getHttpServer()).post(`/organizations/${orgA}/members`).set('Authorization', auth(owner))
+      .send({ email: notified.email, role: 'MEMBER' }).expect(201);
+    const title = `Notified task ${runId}`;
+    const task = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title, assigneeId: notified.id }).expect(201);
+    const selfAssigned = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title: `Self assigned ${runId}`, assigneeId: owner.id }).expect(201);
+    await request(app.getHttpServer()).post(`${path(orgA)}/${task.body.id}/comments`).set('Authorization', auth(admin))
+      .send({ body: 'Acompanhando' }).expect(201);
+
+    const mine = (user: TestUser, query = '') => request(app.getHttpServer()).get(`/notifications${query}`).set('Authorization', auth(user));
+    const received = await mine(notified).expect(200);
+    expect(received.body.data.map((item: { type: string }) => item.type)).toEqual(['TASK_COMMENTED', 'TASK_ASSIGNED']);
+    expect(received.body).toMatchObject({ unreadCount: 2, nextCursor: null });
+    expect(received.body.data[1]).toMatchObject({
+      taskId: task.body.id, taskTitle: title, readAt: null, actor: { id: owner.id }, organization: { id: orgA },
+    });
+    const ownerNotifications = (await mine(owner, '?limit=50').expect(200)).body.data as { taskTitle: string; type: string }[];
+    expect(ownerNotifications.filter((item) => item.taskTitle === title).map((item) => item.type)).toEqual(['TASK_COMMENTED']);
+    expect(ownerNotifications.some((item) => item.taskTitle === `Self assigned ${runId}`)).toBe(false);
+    const adminNotifications = (await mine(admin, '?limit=50').expect(200)).body.data as { taskTitle: string }[];
+    expect(adminNotifications.some((item) => item.taskTitle === title)).toBe(false);
+
+    const first = received.body.data[0].id as string;
+    await request(app.getHttpServer()).post(`/notifications/${first}/read`).set('Authorization', auth(other)).expect(404);
+    await request(app.getHttpServer()).post(`/notifications/${first}/read`).set('Authorization', auth(notified)).expect(204);
+    await request(app.getHttpServer()).post(`/notifications/${first}/read`).set('Authorization', auth(notified)).expect(204);
+    expect((await mine(notified, '?unread=true').expect(200)).body).toMatchObject({ unreadCount: 1, data: [{ type: 'TASK_ASSIGNED' }] });
+    await request(app.getHttpServer()).post('/notifications/read-all').set('Authorization', auth(notified)).expect(204);
+    expect((await mine(notified).expect(200)).body.unreadCount).toBe(0);
+
+    await prisma.membership.delete({ where: { organizationId_userId: { organizationId: orgA, userId: notified.id } } });
+    expect((await mine(notified).expect(200)).body).toEqual({ data: [], nextCursor: null, unreadCount: 0 });
+
+    // Remove as tarefas criadas aqui para não afetar as contagens dos demais testes.
+    for (const id of [task.body.id, selfAssigned.body.id]) {
+      await request(app.getHttpServer()).delete(`${path(orgA)}/${id}?version=1`).set('Authorization', auth(owner)).expect(204);
+    }
+  });
+
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {
     const list = await request(app.getHttpServer()).get(path(orgA)).set('Authorization', auth(owner))
       .query({ page: 1, limit: 1, sortBy: 'title', sortOrder: 'asc' }).expect(200);

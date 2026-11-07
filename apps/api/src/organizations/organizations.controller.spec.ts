@@ -13,6 +13,7 @@ import { RefreshTokensService } from '../auth/refresh-tokens.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksController } from '../tasks/tasks.controller.js';
 import { TasksService } from '../tasks/tasks.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { OrganizationsController } from './organizations.controller.js';
 import { OrganizationsService } from './organizations.service.js';
@@ -65,6 +66,7 @@ describe('Authenticated HTTP endpoints', () => {
       providers: [
         AuthService, OrganizationsService, TasksService, JwtAuthGuard,
         RefreshCookieService, RefreshRequestGuard,
+        { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },
         { provide: ActivityService, useValue: { record: vi.fn().mockResolvedValue(undefined) } },
         { provide: ConfigService, useValue: { get: () => undefined } },
         { provide: RefreshTokensService, useValue: refreshTokens },

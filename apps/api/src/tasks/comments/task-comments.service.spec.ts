@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { commentSelect, TaskCommentsService } from './task-comments.service.js';
 import { ActivityService } from '../../activity/activity.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
 
 describe('TaskCommentsService', () => {
   const organizationId = 'org';
@@ -22,12 +23,14 @@ describe('TaskCommentsService', () => {
   const comment = (id: string) => ({ id, taskId, body: 'Texto', editedAt: null, createdAt: new Date(), author: { id: userId, name: 'User' } });
 
   let activity: { record: ReturnType<typeof vi.fn> };
+  let notifications: { notify: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     activity = { record: vi.fn().mockResolvedValue(undefined) };
+    notifications = { notify: vi.fn().mockResolvedValue(undefined) };
     prisma = {
       membership: { findUnique: vi.fn().mockResolvedValue({ role: 'MEMBER' }) },
-      task: { findFirst: vi.fn().mockResolvedValue({ title: 'Tarefa' }) },
+      task: { findFirst: vi.fn().mockResolvedValue({ title: 'Tarefa', creatorId: 'creator', assigneeId: 'assignee' }) },
       taskComment: {
         findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), create: vi.fn(),
         updateManyAndReturn: vi.fn().mockResolvedValue([]), deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -38,6 +41,7 @@ describe('TaskCommentsService', () => {
         TaskCommentsService,
         { provide: PrismaService, useValue: { ...prisma, $transaction: (callback: (tx: unknown) => unknown) => callback(prisma) } },
         { provide: ActivityService, useValue: activity },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
     service = module.get(TaskCommentsService);
@@ -48,7 +52,9 @@ describe('TaskCommentsService', () => {
     await expect(service.list(organizationId, taskId, userId, { limit: 50 })).rejects.toMatchObject({ status: 404 });
     prisma.task.findFirst.mockResolvedValueOnce(null);
     await expect(service.create(organizationId, taskId, userId, { body: 'Oi' })).rejects.toMatchObject({ status: 404 });
-    expect(prisma.task.findFirst).toHaveBeenCalledWith({ where: { id: taskId, organizationId }, select: { title: true } });
+    expect(prisma.task.findFirst).toHaveBeenCalledWith({
+      where: { id: taskId, organizationId }, select: { title: true, creatorId: true, assigneeId: true },
+    });
     expect(prisma.taskComment.create).not.toHaveBeenCalled();
   });
 
@@ -80,6 +86,10 @@ describe('TaskCommentsService', () => {
     });
     expect(activity.record).toHaveBeenCalledWith(expect.anything(), {
       organizationId, taskId, taskTitle: 'Tarefa', actorId: userId, type: 'COMMENT_ADDED',
+    });
+    expect(notifications.notify).toHaveBeenCalledWith(expect.anything(), {
+      organizationId, taskId, taskTitle: 'Tarefa', actorId: userId, type: 'TASK_COMMENTED',
+      recipients: ['creator', 'assignee'],
     });
   });
 

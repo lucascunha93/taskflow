@@ -23,6 +23,7 @@
       <input class="tf-field" type="search" aria-label="Buscar tarefas pelo título"
         placeholder="Buscar tarefas" maxlength="200" [formControl]="search" />
     </form>
+    <app-notifications-menu />
     <details #profileMenu class="profile-menu">
       <summary class="header-profile" aria-label="Menu de perfil de {{ user().name }}">
         <span class="tf-avatar" aria-hidden="true">{{ user().name.slice(0, 1).toUpperCase() }}</span>

@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksService } from './tasks.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 
 describe('Task summary', () => {
@@ -19,6 +20,7 @@ describe('Task summary', () => {
       providers: [
         TasksService,
         { provide: PrismaService, useValue: prisma },
+        { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },
         { provide: ActivityService, useValue: { record: vi.fn() } },
       ],
     }).compile();

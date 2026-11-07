@@ -4,6 +4,7 @@ import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 describe('TasksService', () => {
   let service: TasksService;
@@ -23,9 +24,11 @@ describe('TasksService', () => {
   const userId = 'creator';
 
   let activity: { record: ReturnType<typeof vi.fn> };
+  let notifications: { notify: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     activity = { record: vi.fn().mockResolvedValue(undefined) };
+    notifications = { notify: vi.fn().mockResolvedValue(undefined) };
     prisma = {
       // Aceita os dois estilos de transação: lista de operações e callback interativo.
       $transaction: vi.fn((operations: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
@@ -41,6 +44,7 @@ describe('TasksService', () => {
         TasksService,
         { provide: PrismaService, useValue: prisma },
         { provide: ActivityService, useValue: activity },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
     service = module.get(TasksService);
@@ -249,6 +253,28 @@ describe('TasksService', () => {
         { field: 'dueDate', from: null, to: '2026-10-30T00:00:00.000Z' },
       ],
     });
+  });
+
+  it('notifies the assignee of a new task unless they created it', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.create.mockResolvedValue({ id: 'task-a', title: 'Task', assigneeId: 'member' });
+    await service.create(organizationId, userId, { title: 'Task', assigneeId: 'member' });
+    expect(notifications.notify).toHaveBeenCalledWith(prisma, {
+      organizationId, taskId: 'task-a', taskTitle: 'Task', actorId: userId, type: 'TASK_ASSIGNED', recipients: ['member'],
+    });
+  });
+
+  it('notifies only when the assignee changes to someone', async () => {
+    const task = { id: 'task-a', organizationId, version: 1, title: 'T', description: null, status: 'TODO', dueDate: null, assigneeId: null, assignee: null };
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.findFirst.mockResolvedValue(task);
+    prisma.task.updateManyAndReturn.mockResolvedValueOnce([{ ...task, version: 2, assigneeId: 'member', assignee: { id: 'member', name: 'M' } }]);
+    await service.update(organizationId, 'task-a', userId, { version: 1, assigneeId: 'member' });
+    expect(notifications.notify).toHaveBeenCalledWith(prisma, expect.objectContaining({ type: 'TASK_ASSIGNED', recipients: ['member'] }));
+    notifications.notify.mockClear();
+    prisma.task.updateManyAndReturn.mockResolvedValueOnce([{ ...task, version: 2, title: 'Novo' }]);
+    await service.update(organizationId, 'task-a', userId, { version: 1, title: 'Novo' });
+    expect(notifications.notify).not.toHaveBeenCalled();
   });
 
   it('does not record history when only the version changes', async () => {

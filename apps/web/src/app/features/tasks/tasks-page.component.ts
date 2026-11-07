@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { debounceTime, map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { MembersService } from '../members/members.service';
@@ -18,15 +18,22 @@ const initialQuery = (): TaskQuery => ({
   dueDateFrom: '', dueDateTo: '', sortBy: 'updatedAt', sortOrder: 'desc',
 });
 
-/** Filtros iniciais aceitos pela URL: `?assignee=me` e `?search=texto`. */
+/**
+ * Estado inicial aceito pela URL: `?assignee=me`, `?search=texto` e
+ * `?task=<id>`, que abre o detalhe (usado pelas notificações).
+ */
 interface RouteFilters {
   mine: boolean;
   search: string;
+  task: string;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const routeFilters = (params: ParamMap): RouteFilters => ({
   mine: params.get('assignee') === 'me',
   search: (params.get('search') ?? '').trim().slice(0, 200),
+  task: UUID.test(params.get('task') ?? '') ? params.get('task') ?? '' : '',
 });
 
 @Component({
@@ -43,13 +50,20 @@ export class TasksPageComponent {
   private readonly api = inject(TasksService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(FormBuilder).nonNullable;
   private readonly activeId = computed(() => this.organizations.active()?.id ?? null);
   private readonly routeFilters = toSignal(this.route.queryParamMap.pipe(map(routeFilters)), {
     initialValue: routeFilters(this.route.snapshot.queryParamMap),
   });
-  protected readonly mine = computed(() => this.routeFilters().mine);
+  /** Somente os filtros; mudar apenas `?task` não reinicia a página. */
+  private readonly filterParams = computed(() => {
+    const { mine, search } = this.routeFilters();
+    return { mine, search };
+  }, { equal: (a, b) => a.mine === b.mine && a.search === b.search });
+  private readonly taskParam = computed(() => this.routeFilters().task);
+  protected readonly mine = computed(() => this.filterParams().mine);
   private readonly contextId = signal<string | null>(null);
   private readonly query = signal<TaskQuery>(initialQuery());
   private readonly reload = signal(0);
@@ -107,7 +121,7 @@ export class TasksPageComponent {
 
     effect(() => {
       this.activeId();
-      const fromRoute = this.routeFilters();
+      const fromRoute = this.filterParams();
       const assigneeId = fromRoute.mine ? untracked(() => this.auth.user()?.id) ?? '' : '';
       this.filters.reset({
         search: fromRoute.search, status: '', assigneeId, creatorId: '', dueDateFrom: '', dueDateTo: '',
@@ -121,6 +135,15 @@ export class TasksPageComponent {
       this.createError.set('');
       this.selected.set(null);
       this.notice.set('');
+    });
+
+    // Abre o detalhe pedido pela URL (por exemplo, a partir de uma notificação).
+    effect(() => {
+      const taskId = this.taskParam();
+      const organizationId = this.activeId();
+      if (taskId && organizationId) {
+        untracked(() => this.selected.set({ id: taskId, organizationId }));
+      }
     });
 
     effect((onCleanup) => {
@@ -214,8 +237,16 @@ export class TasksPageComponent {
     }
   }
 
-  protected changed(message: string): void {
+  /** Fecha o detalhe e remove `?task` da URL, para que um novo link para a mesma tarefa funcione. */
+  protected closeDetail(): void {
     this.selected.set(null);
+    if (this.routeFilters().task) {
+      void this.router.navigate([], { relativeTo: this.route, queryParams: { task: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    }
+  }
+
+  protected changed(message: string): void {
+    this.closeDetail();
     this.notice.set(message);
     this.refresh();
   }

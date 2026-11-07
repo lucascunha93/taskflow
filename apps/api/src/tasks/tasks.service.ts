@@ -15,6 +15,7 @@ import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { taskDateBound } from './task-date-range.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { taskChanges } from '../activity/task-changes.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -52,6 +53,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async summary(organizationId: string, userId: string) {
@@ -224,6 +226,10 @@ export class TasksService {
       await this.activity.record(tx, {
         organizationId, taskId: task.id, taskTitle: task.title, actorId: userId, type: 'TASK_CREATED',
       });
+      await this.notifications.notify(tx, {
+        organizationId, taskId: task.id, taskTitle: task.title, actorId: userId, type: 'TASK_ASSIGNED',
+        recipients: [task.assigneeId],
+      });
       return task;
     });
   }
@@ -284,6 +290,12 @@ export class TasksService {
       if (changes.length > 0) {
         await this.activity.record(tx, {
           organizationId, taskId, taskTitle: after.title, actorId: userId, type: 'TASK_UPDATED', changes,
+        });
+      }
+      if (before && after.assigneeId && after.assigneeId !== before.assigneeId) {
+        await this.notifications.notify(tx, {
+          organizationId, taskId, taskTitle: after.title, actorId: userId, type: 'TASK_ASSIGNED',
+          recipients: [after.assigneeId],
         });
       }
       return after;

@@ -1,0 +1,41 @@
+<details #menu class="notifications" (toggle)="toggled()">
+  <summary class="bell" [attr.aria-label]="notifications.unreadCount() > 0
+      ? 'Notificações, ' + notifications.unreadCount() + ' não lidas'
+      : 'Notificações'">
+    <app-icon name="bell" />
+    @if (notifications.unreadCount() > 0) {
+      <span class="badge" aria-hidden="true">{{ notifications.unreadCount() > 99 ? '99+' : notifications.unreadCount() }}</span>
+    }
+  </summary>
+  <div class="panel tf-menu" role="region" aria-label="Notificações">
+    <div class="panel-heading">
+      <strong>Notificações</strong>
+      @if (notifications.unreadCount() > 0) {
+        <button type="button" class="link-button" [disabled]="markingAll()" (click)="markAll()">Marcar todas como lidas</button>
+      }
+    </div>
+    @if (message()) { <p class="message" role="alert">{{ message() }}</p> }
+    @if (notifications.status() === 'loading') {
+      <p class="state" role="status">Carregando…</p>
+    } @else if (notifications.status() === 'error') {
+      <p class="state" role="alert">Não foi possível carregar as notificações.</p>
+    } @else if (notifications.items().length === 0) {
+      <p class="state">Nenhuma notificação por enquanto.</p>
+    } @else {
+      <ul>
+        @for (item of notifications.items(); track item.id) {
+          <li>
+            <button type="button" class="item" [class.item--unread]="!item.readAt" (click)="open(item)">
+              <span class="text">{{ describe(item) }}</span>
+              <span class="meta">
+                {{ item.organization.name }} · {{ item.createdAt | date: 'dd/MM HH:mm' }}
+                @if (!item.taskId) { · tarefa excluída }
+              </span>
+              @if (!item.readAt) { <span class="visually-hidden">(não lida)</span> }
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+</details>

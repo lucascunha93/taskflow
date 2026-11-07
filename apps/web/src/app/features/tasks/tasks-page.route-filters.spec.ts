@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { API_BASE_URL } from '../../core/api-base-url';
 import { AuthService } from '../../core/auth/auth.service';
@@ -68,6 +68,36 @@ describe('TasksPageComponent route filters', () => {
     second.flush(emptyPage);
     await fixture.whenStable();
     expect(element.querySelector<HTMLInputElement>('#filter-search')?.value).toBe('');
+    fixture.destroy();
+  });
+
+  it('opens the task requested by ?task and removes the parameter when the detail closes', async () => {
+    const taskId = '33333333-3333-4333-8333-333333333333';
+    const fixture = await create({ task: taskId });
+    http.expectOne((req) => req.url === '/api/organizations/one/tasks').flush(emptyPage);
+    const detail = http.expectOne(`/api/organizations/one/tasks/${taskId}`);
+    detail.flush({
+      id: taskId, organizationId: 'one', title: 'Aberta pela notificação', description: null, status: 'TODO',
+      creatorId: 'me', assigneeId: null, version: 1, dueDate: null, createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z', creator: { id: 'me', name: 'Pessoa Atual' }, assignee: null,
+    });
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('#detail-title')?.textContent).toBe('Aberta pela notificação');
+    for (const request of http.match((req) => req.url.endsWith('/comments') || req.url.endsWith('/activity'))) {
+      request.flush({ data: [], nextCursor: null });
+    }
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    element.querySelector<HTMLButtonElement>('.back')?.click();
+    expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { task: null }, queryParamsHandling: 'merge' }));
+    fixture.destroy();
+  });
+
+  it('ignores a malformed task parameter', async () => {
+    const fixture = await create({ task: '../../etc' });
+    http.expectOne((req) => req.url === '/api/organizations/one/tasks').flush(emptyPage);
+    await fixture.whenStable();
+    http.expectNone((req) => req.url.includes('/tasks/'));
     fixture.destroy();
   });
 });
