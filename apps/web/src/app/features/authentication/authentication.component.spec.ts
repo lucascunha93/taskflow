@@ -64,6 +64,10 @@ describe('Authentication forms', () => {
     await fixture.whenStable();
     expect(element.querySelector('[role="alert"]')?.textContent).toContain('E-mail ou senha inválidos');
     expect(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    submit(fixture);
+    http.expectOne('/api/auth/login').flush({}, { status: 429, statusText: 'Too Many Requests' });
+    await fixture.whenStable();
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain('Muitas tentativas');
   });
 
   it('validates the profile after login before navigating', async () => {
@@ -127,6 +131,10 @@ describe('Authentication forms', () => {
     request.flush({}, { status: 409, statusText: 'Conflict' });
     await fixture.whenStable();
     expect(element.querySelector('[role="alert"]')?.textContent).toContain('já está cadastrado');
+    submit(fixture);
+    http.expectOne('/api/auth/register').flush({}, { status: 429, statusText: 'Too Many Requests' });
+    await fixture.whenStable();
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain('Muitas tentativas');
   });
 
   it('redirects to login after registration without creating a session', () => {

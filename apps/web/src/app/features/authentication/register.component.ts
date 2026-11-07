@@ -47,6 +47,8 @@ export class RegisterComponent {
       error: (error: unknown) => this.error.set(
         error instanceof HttpErrorResponse && error.status === 409
           ? 'Este e-mail já está cadastrado.'
+          : error instanceof HttpErrorResponse && error.status === 429
+          ? 'Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente.'
           : 'Não foi possível criar a conta. Verifique sua conexão e tente novamente.',
       ),
     });

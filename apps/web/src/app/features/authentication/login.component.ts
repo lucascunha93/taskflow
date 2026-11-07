@@ -46,6 +46,8 @@ export class LoginComponent {
           ? 'Não foi possível armazenar a sessão neste navegador.'
           : error instanceof HttpErrorResponse && error.status === 401
           ? 'E-mail ou senha inválidos.'
+          : error instanceof HttpErrorResponse && error.status === 429
+          ? 'Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente.'
           : 'Não foi possível entrar. Verifique sua conexão e tente novamente.',
       ),
     });
