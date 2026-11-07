@@ -4,7 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
-import { AuthService, SessionStorageError } from '../../core/auth/auth.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { AuthShellComponent } from './auth-shell.component';
 
 @Component({
@@ -44,9 +44,7 @@ export class LoginComponent {
     ).subscribe({
       next: () => { void this.router.navigateByUrl('/'); },
       error: (error: unknown) => this.error.set(
-        error instanceof SessionStorageError
-          ? 'Não foi possível armazenar a sessão neste navegador.'
-          : error instanceof HttpErrorResponse && error.status === 401
+        error instanceof HttpErrorResponse && error.status === 401
           ? 'E-mail ou senha inválidos.'
           : error instanceof HttpErrorResponse && error.status === 429
           ? 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'

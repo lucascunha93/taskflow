@@ -24,7 +24,12 @@ describe('App', () => {
 
   it('renders the public login route and router outlet without a session', async () => {
     const fixture = TestBed.createComponent(App);
-    await TestBed.inject(Router).navigateByUrl('/login');
+    const navigation = TestBed.inject(Router).navigateByUrl('/login');
+    // Sem cookie de sessão, a restauração recebe 401 e a rota pública é exibida.
+    await vi.waitFor(() => TestBed.inject(HttpTestingController)
+      .expectOne((request) => request.url.endsWith('/auth/refresh'))
+      .flush({}, { status: 401, statusText: 'Unauthorized' }));
+    await navigation;
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('h1')?.textContent).toContain('Entre na sua conta');

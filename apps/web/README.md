@@ -24,22 +24,27 @@ SVGs locais, sem biblioteca externa.
 automaticamente. O login recebe o Bearer JWT e consulta `/auth/me` antes de
 abrir `/`. Os guards aguardam a validação da sessão antes de mostrar o layout
 privado; usuários autenticados são redirecionados das telas públicas para `/`.
-`/session-error` permite tentar novamente quando a validação falha por rede ou
-armazenamento, sem confundir uma indisponibilidade com um 401.
+`/session-error` permite tentar novamente quando a validação falha por rede,
+sem confundir uma indisponibilidade com um 401.
 
-O token é mantido em memória e no `sessionStorage` para restaurar a sessão ao
-recarregar a aba. Não persistimos senhas. O armazenamento é acessível a scripts
-da origem e **não protege contra XSS**; abas abertas com um opener podem receber
-uma cópia inicial do armazenamento. Evite registrar tokens e considere CSP,
-proteções contra XSS e a evolução para cookies `HttpOnly`, `Secure` e `SameSite`
-antes da publicação, avaliando também CSRF.
+O access token (15 minutos) fica **somente em memória**. A sessão continua por
+um refresh token em cookie `HttpOnly`, `Secure` e `SameSite=Strict`, gravado
+pela API e inacessível a scripts. Ao abrir ou recarregar a aplicação,
+`POST /auth/refresh` obtém um novo access token antes de consultar `/auth/me`;
+sem cookie válido, o usuário vai para o login. Tokens deixados no
+`sessionStorage` por versões anteriores são removidos. Não persistimos senhas.
 
-O backend emite tokens com duração de 15 minutos, sem refresh. O botão Sair
-remove apenas a sessão local; o token emitido continua válido até expirar ou até
-uma revogação. Para invalidá-lo no servidor, o perfil oferece "Encerrar todas as
-sessões", que encerra também as outras sessões do usuário. A expiração ou a
-revogação é detectada ao validar a sessão ou fazer uma requisição protegida:
-respostas 401 encerram a sessão e direcionam para o login. Login e cadastro
+Quando uma requisição protegida recebe 401, o interceptor faz um único refresh
+(compartilhado entre requisições simultâneas) e repete a requisição com o novo
+token. Se o refresh também responder 401, a sessão é encerrada e o usuário vai
+para o login; uma falha de rede no refresh não encerra a sessão. Um 409
+(outra aba renovando o mesmo cookie) é repetido uma vez.
+
+O botão Sair limpa a sessão local e chama `POST /auth/logout`, que revoga o
+refresh token desta sessão. "Encerrar todas as sessões", no perfil, revoga
+todas. As chamadas de sessão enviam `X-TaskFlow-Request: 1`, exigido pela API
+contra CSRF. XSS continua sendo um risco para o access token em memória e para
+as ações feitas em nome do usuário: mantenha CSP e as proteções do Angular. Login e cadastro
 informam quando a API recusa tentativas em excesso (429), seja pelo limite por
 IP, seja pelo bloqueio temporário da conta.
 
@@ -166,7 +171,8 @@ A aplicação disponibiliza a URL pelo token `API_BASE_URL` em
 `src/app/core/api-base-url.ts`. Ajuste `apiBaseUrl` em:
 
 - `src/environments/environment.development.ts`: desenvolvimento, por padrão
-  a mesma origem. O proxy da CLI encaminha `/auth`, `/organizations` e os
+  a mesma origem. O cookie de refresh usa o caminho `/auth`, preservado pelo
+  proxy. O proxy da CLI encaminha `/auth`, `/organizations` e os
   endpoints de membros e tarefas para `http://localhost:3000`, preservando
   a rota Angular `/organizations/new`. `PATCH /organizations/:id` é
   encaminhado somente quando o ID tem formato UUID. Inicie a API separadamente.

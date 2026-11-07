@@ -39,6 +39,8 @@ describe('OrganizationsService', () => {
   });
 
   afterEach(() => {
+    // O logout real também pede à API que revogue o cookie de refresh.
+    for (const request of http.match('/api/auth/logout')) request.flush(null, { status: 204, statusText: 'No Content' });
     http.verify();
     sessionStorage.clear();
     vi.restoreAllMocks();
@@ -100,6 +102,10 @@ describe('OrganizationsService', () => {
     service = TestBed.inject(OrganizationsService);
     http = TestBed.inject(HttpTestingController);
     const restored = firstValueFrom(auth.restoreSession());
+    http.expectOne('/api/auth/refresh').flush({
+      accessToken: 'restored-token', tokenType: 'Bearer', expiresIn: 900,
+      user: { id: user.id, name: user.name, email: user.email },
+    });
     http.expectOne('/api/auth/me').flush(user);
     await restored;
     load([first, second]);
@@ -180,6 +186,8 @@ describe('OrganizationsService', () => {
     vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     service.refresh();
     http.expectOne('/api/organizations').flush({}, { status: 401, statusText: 'Unauthorized' });
+    // O interceptor tenta renovar; a sessão de refresh também não é mais válida.
+    http.expectOne('/api/auth/refresh').flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(auth.status()).toBe('unauthenticated');
     expect(service.active()).toBeNull();
     expect(sessionStorage.getItem(storageKey)).toBeNull();

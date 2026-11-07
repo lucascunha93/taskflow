@@ -14,7 +14,7 @@ import { AuthShellComponent } from './auth-shell.component';
     <app-auth-shell>
       <p class="eyebrow">Sessão</p>
       <h1>Não foi possível verificar sua sessão</h1>
-      <p class="intro" role="alert">Verifique sua conexão e se o armazenamento do navegador está disponível.</p>
+      <p class="intro" role="alert">Verifique sua conexão com a internet e tente novamente.</p>
       <button type="button" class="tf-button submit" [disabled]="loading()" (click)="retry()">
         {{ loading() ? 'Verificando…' : 'Tentar novamente' }}
       </button>

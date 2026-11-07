@@ -11,13 +11,13 @@ const user = { id: 'id-1', name: 'Pessoa Teste', email: 'pessoa@example.test', c
 const credentials = { email: 'pessoa@example.test', password: 'synthetic-password' };
 const fakeToken = 'synthetic-token';
 const loginResponse = { accessToken: fakeToken, tokenType: 'Bearer', expiresIn: 900, user: { id: user.id, name: user.name, email: user.email } };
+const unauthorized = { status: 401, statusText: 'Unauthorized' };
 
 describe('AuthService and interceptor', () => {
   let auth: AuthService;
   let http: HttpTestingController;
 
-  beforeEach(() => {
-    sessionStorage.clear();
+  function configure(): void {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -28,6 +28,11 @@ describe('AuthService and interceptor', () => {
     });
     auth = TestBed.inject(AuthService);
     http = TestBed.inject(HttpTestingController);
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    configure();
   });
 
   afterEach(() => {
@@ -40,6 +45,7 @@ describe('AuthService and interceptor', () => {
     const result = firstValueFrom(auth.login(credentials));
     const request = http.expectOne('/api/auth/login');
     expect(request.request.headers.has('Authorization')).toBe(false);
+    expect(request.request.withCredentials).toBe(true);
     request.flush(loginResponse);
     const profile = http.expectOne('/api/auth/me');
     expect(profile.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`);
@@ -47,33 +53,57 @@ describe('AuthService and interceptor', () => {
     return result;
   }
 
-  it('logs in, validates the profile and restores it from storage after reload', async () => {
+  function expectLogoutCall(): void {
+    const request = http.expectOne('/api/auth/logout');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.withCredentials).toBe(true);
+    expect(request.request.headers.get('X-TaskFlow-Request')).toBe('1');
+    expect(request.request.headers.has('Authorization')).toBe(false);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  }
+
+  it('logs in without storing the token and restores the session through the refresh cookie', async () => {
     await expect(login()).resolves.toEqual(user);
     expect(auth.status()).toBe('authenticated');
-    expect(auth.user()).toEqual(user);
+    expect(sessionStorage.length).toBe(0);
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [
-        provideRouter([]), provideHttpClient(withInterceptors([authInterceptor])), provideHttpClientTesting(),
-        { provide: API_BASE_URL, useValue: '/api' },
-      ],
-    });
-    auth = TestBed.inject(AuthService);
-    http = TestBed.inject(HttpTestingController);
+    configure();
     const first = firstValueFrom(auth.restoreSession());
     const second = firstValueFrom(auth.restoreSession());
     expect(auth.status()).toBe('loading');
+    http.expectOne('/api/auth/refresh').flush({ ...loginResponse, accessToken: 'restored-token' });
     const profile = http.expectOne('/api/auth/me');
-    expect(profile.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`);
+    expect(profile.request.headers.get('Authorization')).toBe('Bearer restored-token');
     profile.flush(user);
     await expect(first).resolves.toBe('authenticated');
     await expect(second).resolves.toBe('authenticated');
     expect(auth.user()).toEqual(user);
   });
 
+  it('removes a token left in sessionStorage by previous versions', () => {
+    sessionStorage.setItem('taskflow.accessToken', 'legacy');
+    TestBed.resetTestingModule();
+    configure();
+    expect(sessionStorage.getItem('taskflow.accessToken')).toBeNull();
+  });
+
+  it('retries a refresh once after a concurrent-refresh conflict', async () => {
+    vi.useFakeTimers();
+    try {
+      const result = firstValueFrom(auth.restoreSession());
+      http.expectOne('/api/auth/refresh').flush({}, { status: 409, statusText: 'Conflict' });
+      await vi.advanceTimersByTimeAsync(400);
+      http.expectOne('/api/auth/refresh').flush(loginResponse);
+      http.expectOne('/api/auth/me').flush(user);
+      await expect(result).resolves.toBe('authenticated');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('propagates login failures without creating a session', async () => {
     const result = firstValueFrom(auth.login(credentials));
-    http.expectOne('/api/auth/login').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/auth/login').flush({}, unauthorized);
     await expect(result).rejects.toMatchObject({ status: 401 });
     expect(auth.user()).toBeNull();
     expect(auth.getToken()).toBeNull();
@@ -92,13 +122,20 @@ describe('AuthService and interceptor', () => {
     await expect(failure).rejects.toMatchObject({ status: 409 });
   });
 
-  it('clears local session on logout', async () => {
+  it('clears the local session immediately on logout and asks the API to revoke the cookie session', async () => {
     await login();
     auth.logout();
     expect(auth.status()).toBe('unauthenticated');
     expect(auth.user()).toBeNull();
     expect(auth.getToken()).toBeNull();
-    expect(sessionStorage.getItem('taskflow.accessToken')).toBeNull();
+    expectLogoutCall();
+  });
+
+  it('keeps the local logout when the API cannot be reached', async () => {
+    await login();
+    auth.logout();
+    http.expectOne('/api/auth/logout').error(new ProgressEvent('error'));
+    expect(auth.status()).toBe('unauthenticated');
   });
 
   it('clears a provisional token if profile validation is cancelled', () => {
@@ -109,31 +146,9 @@ describe('AuthService and interceptor', () => {
     expect(profile.cancelled).toBe(true);
     expect(auth.getToken()).toBeNull();
     expect(auth.status()).toBe('unauthenticated');
-    expect(sessionStorage.getItem('taskflow.accessToken')).toBeNull();
   });
 
-  it('does not silently retain a session when browser storage is unavailable', async () => {
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('unavailable'); });
-    const result = firstValueFrom(auth.login(credentials));
-    http.expectOne('/api/auth/login').flush(loginResponse);
-    await expect(result).rejects.toMatchObject({ message: 'Não foi possível armazenar a sessão neste navegador.' });
-    expect(auth.user()).toBeNull();
-    expect(auth.getToken()).toBeNull();
-    http.expectNone('/api/auth/me');
-  });
-
-  it('does not restore a logged-out session if storage removal initially fails', async () => {
-    await login();
-    const removal = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('unavailable'); });
-    auth.logout();
-    expect(auth.status()).toBe('error');
-    removal.mockRestore();
-    await expect(firstValueFrom(auth.restoreSession())).resolves.toBe('unauthenticated');
-    expect(auth.getToken()).toBeNull();
-    http.expectNone('/api/auth/me');
-  });
-
-  it('does not send credentials to other origins, paths, or public endpoints', async () => {
+  it('does not send the bearer token to other origins, paths, or session endpoints', async () => {
     await login();
     const client = TestBed.inject(HttpClient);
     client.get('https://outside.example.test/api/tasks').subscribe();
@@ -146,50 +161,90 @@ describe('AuthService and interceptor', () => {
     }
   });
 
-  it('expires only once on concurrent 401 responses', async () => {
+  it('renews an expired access token once and repeats the original request', async () => {
     await login();
-    const router = TestBed.inject(Router);
-    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const client = TestBed.inject(HttpClient);
+    const result = firstValueFrom(client.get('/api/organizations'));
+    http.expectOne('/api/organizations').flush({}, unauthorized);
+    http.expectOne('/api/auth/refresh').flush({ ...loginResponse, accessToken: 'renewed-token' });
+    const retried = http.expectOne('/api/organizations');
+    expect(retried.request.headers.get('Authorization')).toBe('Bearer renewed-token');
+    retried.flush([]);
+    await expect(result).resolves.toEqual([]);
+    expect(auth.getToken()).toBe('renewed-token');
+    expect(auth.status()).toBe('authenticated');
+  });
+
+  it('shares one refresh between concurrent 401 responses', async () => {
+    await login();
+    const client = TestBed.inject(HttpClient);
+    const tasks = firstValueFrom(client.get('/api/tasks'));
+    const organizations = firstValueFrom(client.get('/api/organizations'));
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    http.expectOne('/api/organizations').flush({}, unauthorized);
+    http.expectOne('/api/auth/refresh').flush({ ...loginResponse, accessToken: 'renewed-token' });
+    http.expectOne('/api/tasks').flush({ ok: 1 });
+    http.expectOne('/api/organizations').flush({ ok: 2 });
+    await expect(tasks).resolves.toEqual({ ok: 1 });
+    await expect(organizations).resolves.toEqual({ ok: 2 });
+  });
+
+  it('expires the session only once when the refresh session is no longer valid', async () => {
+    await login();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     const client = TestBed.inject(HttpClient);
     client.get('/api/tasks').subscribe({ error: () => undefined });
     client.get('/api/organizations').subscribe({ error: () => undefined });
-    http.expectOne('/api/tasks').flush({}, { status: 401, statusText: 'Unauthorized' });
-    http.expectOne('/api/organizations').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    http.expectOne('/api/organizations').flush({}, unauthorized);
+    http.expectOne('/api/auth/refresh').flush({}, unauthorized);
     expect(auth.status()).toBe('unauthenticated');
     expect(auth.sessionExpired()).toBe(true);
     expect(navigate).toHaveBeenCalledOnce();
   });
 
-  it('preserves the token on network errors when restoring and allows retry', async () => {
-    sessionStorage.setItem('taskflow.accessToken', fakeToken);
+  it('keeps the session when the refresh fails because of the network', async () => {
+    await login();
+    const client = TestBed.inject(HttpClient);
+    const result = firstValueFrom(client.get('/api/tasks'));
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    http.expectOne('/api/auth/refresh').flush({}, { status: 503, statusText: 'Unavailable' });
+    await expect(result).rejects.toMatchObject({ status: 401 });
+    expect(auth.status()).toBe('authenticated');
+  });
+
+  it('does not refresh again when the repeated request is also rejected', async () => {
+    await login();
+    const client = TestBed.inject(HttpClient);
+    const result = firstValueFrom(client.get('/api/tasks'));
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    http.expectOne('/api/auth/refresh').flush({ ...loginResponse, accessToken: 'renewed-token' });
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    await expect(result).rejects.toMatchObject({ status: 401 });
+    http.expectNone('/api/auth/refresh');
+  });
+
+  it('allows retrying a restore after a network error', async () => {
     const first = firstValueFrom(auth.restoreSession());
-    http.expectOne('/api/auth/me').flush({}, { status: 503, statusText: 'Unavailable' });
+    http.expectOne('/api/auth/refresh').flush({}, { status: 503, statusText: 'Unavailable' });
     await expect(first).resolves.toBe('error');
     expect(auth.user()).toBeNull();
     const retry = firstValueFrom(auth.restoreSession());
+    http.expectOne('/api/auth/refresh').flush(loginResponse);
     http.expectOne('/api/auth/me').flush(user);
     await expect(retry).resolves.toBe('authenticated');
   });
 
-  it('rejects an expired restored session without showing private content', async () => {
-    sessionStorage.setItem('taskflow.accessToken', fakeToken);
-    const result = firstValueFrom(auth.restoreSession());
-    http.expectOne('/api/auth/me').flush({}, { status: 401, statusText: 'Unauthorized' });
-    await expect(result).resolves.toBe('unauthenticated');
-    expect(auth.sessionExpired()).toBe(true);
-    expect(auth.user()).toBeNull();
-  });
-
   it('refuses to authenticate if the profile response is malformed', async () => {
-    sessionStorage.setItem('taskflow.accessToken', fakeToken);
     const result = firstValueFrom(auth.restoreSession());
+    http.expectOne('/api/auth/refresh').flush(loginResponse);
     http.expectOne('/api/auth/me').flush({ id: 'id-1' });
     await expect(result).resolves.toBe('error');
     expect(auth.user()).toBeNull();
     expect(auth.status()).toBe('error');
   });
 
-  it('rejects a malformed login response before storing a token', async () => {
+  it('rejects a malformed login response before using a token', async () => {
     const result = firstValueFrom(auth.login(credentials));
     http.expectOne('/api/auth/login').flush({ tokenType: 'Bearer' });
     await expect(result).rejects.toMatchObject({ message: 'Resposta de autenticação inválida.' });
@@ -203,8 +258,11 @@ describe('AuthService and interceptor', () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     client.get('/api/tasks').subscribe({ error: () => undefined });
     auth.logout();
+    expectLogoutCall();
     await login();
-    http.expectOne('/api/tasks').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/tasks').flush({}, unauthorized);
+    // O 401 antigo pede um refresh; a resposta vem para a sessão atual.
+    http.expectOne('/api/auth/refresh').flush({}, unauthorized);
     expect(auth.status()).toBe('authenticated');
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -228,6 +286,7 @@ describe('AuthService and interceptor', () => {
     const result = firstValueFrom(auth.updateProfile('Nome'));
     const request = http.expectOne('/api/auth/me');
     auth.logout();
+    expectLogoutCall();
     request.flush({ ...user, name: 'Nome' });
     await expect(result).rejects.toThrow();
     expect(auth.user()).toBeNull();
@@ -238,12 +297,13 @@ describe('AuthService and interceptor', () => {
     const result = firstValueFrom(auth.changePassword('old-password-123', 'new-password-123'), { defaultValue: undefined });
     const request = http.expectOne('/api/auth/me/password');
     expect(request.request.method).toBe('PUT');
+    expect(request.request.withCredentials).toBe(true);
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`);
     expect(request.request.body).toEqual({ currentPassword: 'old-password-123', newPassword: 'new-password-123' });
     request.flush({ ...loginResponse, accessToken: 'rotated-token' });
     await result;
     expect(auth.getToken()).toBe('rotated-token');
-    expect(sessionStorage.getItem('taskflow.accessToken')).toBe('rotated-token');
+    expect(sessionStorage.length).toBe(0);
     expect(auth.status()).toBe('authenticated');
   });
 
@@ -264,11 +324,11 @@ describe('AuthService and interceptor', () => {
     const result = firstValueFrom(auth.revokeAllSessions(), { defaultValue: undefined });
     const request = http.expectOne('/api/auth/me/sessions');
     expect(request.request.method).toBe('DELETE');
+    expect(request.request.withCredentials).toBe(true);
     expect(auth.status()).toBe('authenticated');
     request.flush(null, { status: 204, statusText: 'No Content' });
     await result;
     expect(auth.status()).toBe('unauthenticated');
     expect(auth.getToken()).toBeNull();
-    expect(sessionStorage.getItem('taskflow.accessToken')).toBeNull();
   });
 });
