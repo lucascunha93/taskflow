@@ -106,6 +106,15 @@ somente para leitura. Trocar de organização descarta edições e mensagens
 pendentes. Um 403 ou 404 da API é informado; a permissão visual é apenas
 orientação.
 
+### Comentários
+
+O detalhe da tarefa lista os comentários em ordem cronológica, em páginas de 50
+("Carregar mais comentários"), e permite comentar. O autor pode editar seus
+comentários, marcados como "(editado)"; o autor, proprietários e
+administradores podem excluí-los, com confirmação. A troca de organização
+cancela as requisições e limpa a lista. Uma falha ao enviar não repete o envio
+automaticamente, para evitar comentários duplicados.
+
 ## Membros
 
 Em `/members`, a aplicação consulta `GET /organizations/:organizationId/members`

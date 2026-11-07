@@ -148,6 +148,8 @@ de produção.
 | POST, GET | `/organizations/:organizationId/tasks` | JWT |
 | GET | `/organizations/:organizationId/tasks/summary` | JWT |
 | GET, PUT, DELETE | `/organizations/:organizationId/tasks/:taskId` | JWT |
+| GET, POST | `/organizations/:organizationId/tasks/:taskId/comments` | JWT |
+| PATCH, DELETE | `/organizations/:organizationId/tasks/:taskId/comments/:commentId` | JWT |
 
 ### Refresh token
 
@@ -225,6 +227,26 @@ As consultas exigem associação à organização e retornam os campos da tarefa
 mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
 O detalhe retorna 404 para tarefa inexistente na organização, inclusive quando
 pertence a outro tenant. Organizações inacessíveis também retornam 404.
+
+### Comentários
+
+Qualquer membro da organização lê e comenta tarefas dela. Organização
+inacessível ou tarefa de outra organização retornam 404. O corpo aceita
+`{ "body": "..." }` com 1 a 5000 caracteres após remover espaços nas pontas.
+
+- `GET .../comments?limit=50&after=<commentId>` lista em ordem cronológica
+  (`createdAt` e `id`), com `limit` de 1 a 100, e retorna
+  `{ data, nextCursor }`; `nextCursor` é `null` na última página. Um cursor de
+  outra tarefa retorna 400.
+- `POST` cria o comentário com o autor do JWT e retorna `id`, `taskId`, `body`,
+  `editedAt`, `createdAt` e `author` (`id`, `name`).
+- `PATCH .../comments/:commentId` é permitido somente ao autor (403 para os
+  demais) e preenche `editedAt`.
+- `DELETE` é permitido ao autor, a OWNER e a ADMIN; responde 204.
+
+No banco, `task_comments` referencia a tarefa por `(taskId, organizationId)`,
+o que impede um comentário de apontar para uma tarefa de outra organização.
+Comentários são excluídos junto com a tarefa.
 
 ### Resumo para o dashboard
 

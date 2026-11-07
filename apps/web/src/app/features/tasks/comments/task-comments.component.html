@@ -1,0 +1,64 @@
+<section class="comments" aria-labelledby="comments-title">
+  <h3 id="comments-title">Comentários</h3>
+  @if (loading()) {
+    <p role="status">Carregando comentários…</p>
+  } @else if (loadError()) {
+    <p class="message" role="alert">{{ loadError() }}</p>
+  } @else {
+    @if (comments().length === 0) {
+      <p class="empty">Nenhum comentário ainda. Use o campo abaixo para iniciar a conversa.</p>
+    } @else {
+      <ol class="comment-list">
+        @for (comment of comments(); track comment.id) {
+          <li class="comment">
+            <div class="comment-meta">
+              <strong>{{ comment.author.name }}</strong>
+              <time [attr.datetime]="comment.createdAt">{{ comment.createdAt | date: 'dd/MM/yyyy HH:mm' }}</time>
+              @if (comment.editedAt) { <span class="edited">(editado)</span> }
+            </div>
+            @if (editingId() === comment.id) {
+              <form class="comment-form" (submit)="$event.preventDefault(); saveEdit(comment)">
+                <label class="visually-hidden" [attr.for]="'edit-' + comment.id">Editar comentário</label>
+                <textarea [id]="'edit-' + comment.id" class="tf-field" rows="3" [maxlength]="maxLength" [formControl]="editDraft"></textarea>
+                @if (editDraft.touched && editDraft.invalid) { <p class="field-error">Escreva o comentário antes de salvar.</p> }
+                <div class="actions">
+                  <button type="submit" class="tf-button" [disabled]="busyId() === comment.id">{{ busyId() === comment.id ? 'Salvando…' : 'Salvar' }}</button>
+                  <button type="button" class="tf-button tf-button--subtle" [disabled]="busyId() === comment.id" (click)="editingId.set(null)">Cancelar</button>
+                </div>
+              </form>
+            } @else {
+              <p class="comment-body">{{ comment.body }}</p>
+              <div class="actions">
+                @if (comment.author.id === userId()) {
+                  <button type="button" class="link-button" (click)="startEdit(comment)">Editar</button>
+                }
+                @if (canDelete(comment)) {
+                  @if (confirmingId() === comment.id) {
+                    <span>Excluir este comentário?</span>
+                    <button type="button" class="link-button danger" [disabled]="busyId() === comment.id" (click)="remove(comment)">Confirmar</button>
+                    <button type="button" class="link-button" (click)="confirmingId.set(null)">Cancelar</button>
+                  } @else {
+                    <button type="button" class="link-button" (click)="confirmingId.set(comment.id)">Excluir</button>
+                  }
+                }
+              </div>
+            }
+          </li>
+        }
+      </ol>
+      @if (nextCursor()) {
+        <button type="button" class="tf-button tf-button--subtle" [disabled]="loadingMore()" (click)="loadMore()">
+          {{ loadingMore() ? 'Carregando…' : 'Carregar mais comentários' }}
+        </button>
+      }
+    }
+    @if (actionError()) { <p class="message" role="alert">{{ actionError() }}</p> }
+    <form class="comment-form" (submit)="$event.preventDefault(); submit()" [attr.aria-busy]="posting()">
+      <label for="new-comment">Novo comentário</label>
+      <textarea id="new-comment" class="tf-field" rows="3" [maxlength]="maxLength" [formControl]="draft"
+        [attr.aria-invalid]="draft.touched && draft.invalid"></textarea>
+      @if (draft.touched && draft.invalid) { <p class="field-error">Escreva o comentário antes de enviar.</p> }
+      <button type="submit" class="tf-button" [disabled]="posting()">{{ posting() ? 'Enviando…' : 'Comentar' }}</button>
+    </form>
+  }
+</section>

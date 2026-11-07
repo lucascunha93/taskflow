@@ -21,13 +21,14 @@ enum TaskStatus {
 }
 
 model Organization {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String       @db.VarChar(120)
-  slug        String       @unique @db.VarChar(80)
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String        @db.VarChar(120)
+  slug        String        @unique @db.VarChar(80)
   memberships Membership[]
   tasks       Task[]
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  comments    TaskComment[]
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
 
   @@map("organizations")
 }
@@ -45,6 +46,7 @@ model User {
   lockedUntil         DateTime?      @db.Timestamptz(3)
   memberships         Membership[]
   refreshTokens       RefreshToken[]
+  comments            TaskComment[]  @relation("CommentAuthor")
   createdTasks        Task[]         @relation("TaskCreator")
   assignedTasks       Task[]         @relation("TaskAssignee")
   createdAt           DateTime       @default(now()) @db.Timestamptz(3)
@@ -88,22 +90,43 @@ model Membership {
 }
 
 model Task {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  title          String       @db.VarChar(200)
-  description    String?      @db.Text
-  status         TaskStatus   @default(TODO)
-  creatorId      String       @db.Uuid
-  assigneeId     String?      @db.Uuid
-  version        Int          @default(1)
-  dueDate        DateTime?    @db.Timestamptz(3)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator        User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  assignee       User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  title          String        @db.VarChar(200)
+  description    String?       @db.Text
+  status         TaskStatus    @default(TODO)
+  creatorId      String        @db.Uuid
+  assigneeId     String?       @db.Uuid
+  version        Int           @default(1)
+  dueDate        DateTime?     @db.Timestamptz(3)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        User          @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee       User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  comments       TaskComment[]
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
 
+  /// Permite que registros dependentes referenciem a tarefa junto com sua organização.
+  @@unique([id, organizationId])
   @@index([organizationId, status, updatedAt])
   @@index([organizationId, assigneeId])
   @@map("tasks")
+}
+
+/// Comentário em uma tarefa. A chave composta (taskId, organizationId) garante
+/// no banco que o comentário pertence à mesma organização da tarefa.
+model TaskComment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  taskId         String       @db.Uuid
+  authorId       String       @db.Uuid
+  body           String       @db.Text
+  editedAt       DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task         @relation(fields: [taskId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  author         User         @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt, id])
+  @@map("task_comments")
 }

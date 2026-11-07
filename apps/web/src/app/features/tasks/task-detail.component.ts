@@ -5,11 +5,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { CreateTask, Task, UpdateTask, statusLabel } from './task.models';
 import { TaskFormComponent } from './task-form.component';
+import { TaskCommentsComponent } from './comments/task-comments.component';
 import { TasksService } from './tasks.service';
 
 @Component({
   selector: 'app-task-detail',
-  imports: [DatePipe, TaskFormComponent],
+  imports: [DatePipe, TaskCommentsComponent, TaskFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './task-detail.component.html',
   styleUrl: './task-detail.component.scss',

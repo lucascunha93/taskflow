@@ -273,6 +273,49 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', withoutHeader).expect(403);
   });
 
+  it('keeps comments inside the tenant and enforces author and moderator rules', async () => {
+    const comments = (org: string, task: string) => `/organizations/${org}/tasks/${task}/comments`;
+    const created = await request(app.getHttpServer()).post(comments(orgA, taskA)).set('Authorization', auth(member))
+      .send({ body: '  Primeiro comentário  ' }).expect(201);
+    expect(created.body).toMatchObject({ body: 'Primeiro comentário', author: { id: member.id }, editedAt: null });
+    await request(app.getHttpServer()).post(comments(orgA, taskA)).set('Authorization', auth(owner))
+      .send({ body: 'Resposta' }).expect(201);
+
+    await request(app.getHttpServer()).get(comments(orgA, taskA)).set('Authorization', auth(other)).expect(404);
+    await request(app.getHttpServer()).post(comments(orgA, taskB)).set('Authorization', auth(owner))
+      .send({ body: 'Tarefa de outro tenant' }).expect(404);
+    await request(app.getHttpServer()).get(comments(orgB, taskB)).set('Authorization', auth(owner)).expect(404);
+
+    const page = await request(app.getHttpServer()).get(`${comments(orgA, taskA)}?limit=1`)
+      .set('Authorization', auth(admin)).expect(200);
+    expect(page.body.data.map((item: { body: string }) => item.body)).toEqual(['Primeiro comentário']);
+    const next = await request(app.getHttpServer()).get(`${comments(orgA, taskA)}?limit=1&after=${page.body.nextCursor}`)
+      .set('Authorization', auth(admin)).expect(200);
+    expect(next.body).toMatchObject({ data: [{ body: 'Resposta' }], nextCursor: null });
+
+    const id = created.body.id as string;
+    await request(app.getHttpServer()).patch(`${comments(orgA, taskA)}/${id}`).set('Authorization', auth(owner))
+      .send({ body: 'Edição alheia' }).expect(403);
+    const edited = await request(app.getHttpServer()).patch(`${comments(orgA, taskA)}/${id}`).set('Authorization', auth(member))
+      .send({ body: 'Editado' }).expect(200);
+    expect(edited.body.editedAt).toEqual(expect.any(String));
+    const ownerComment = next.body.data[0].id as string;
+    await request(app.getHttpServer()).delete(`${comments(orgA, taskA)}/${ownerComment}`).set('Authorization', auth(member)).expect(403);
+    await request(app.getHttpServer()).delete(`${comments(orgA, taskA)}/${id}`).set('Authorization', auth(admin)).expect(204);
+    await request(app.getHttpServer()).delete(`${comments(orgA, taskA)}/${id}`).set('Authorization', auth(admin)).expect(404);
+
+    await expect(prisma.taskComment.create({
+      data: { organizationId: orgB, taskId: taskA, authorId: owner.id, body: 'Organização divergente' },
+    })).rejects.toThrow();
+
+    const temporary = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title: 'Temporary commented task' }).expect(201);
+    await request(app.getHttpServer()).post(comments(orgA, temporary.body.id)).set('Authorization', auth(owner))
+      .send({ body: 'Será removido junto' }).expect(201);
+    await request(app.getHttpServer()).delete(`${path(orgA)}/${temporary.body.id}?version=1`).set('Authorization', auth(owner)).expect(204);
+    expect(await prisma.taskComment.count({ where: { taskId: temporary.body.id } })).toBe(0);
+  });
+
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {
     const list = await request(app.getHttpServer()).get(path(orgA)).set('Authorization', auth(owner))
       .query({ page: 1, limit: 1, sortBy: 'title', sortOrder: 'asc' }).expect(200);
