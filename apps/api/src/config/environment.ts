@@ -30,6 +30,10 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     errors.push('TRUST_PROXY precisa ser o número de proxies confiáveis, entre 0 e 10.');
   }
 
+  if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
+    errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
+  }
+
   try {
     parseCorsOrigins(text('CORS_ORIGINS'));
   } catch (error: unknown) {
@@ -61,6 +65,15 @@ export function parseCorsOrigins(value: string | undefined): string[] {
     }
     return url.origin;
   });
+}
+
+/** Opções do NestJS Observe: habilitado somente com credenciais reais configuradas. */
+export function observeOptions(env: Record<string, string | undefined>) {
+  const appKey = env.OBSERVE_APP_KEY?.trim();
+  const appSecret = env.OBSERVE_APP_SECRET?.trim();
+  return appKey && appSecret
+    ? { enabled: true, appKey, appSecret, serviceId: 'api' }
+    : { enabled: false, serviceId: 'api' };
 }
 
 function isIntegerInRange(value: string, min: number, max: number): boolean {

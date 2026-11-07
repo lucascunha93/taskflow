@@ -267,8 +267,9 @@ inexistente na organização retorna 404; versão desatualizada retorna 409.
   avalie um armazenamento compartilhado. Atrás de um proxy reverso, configure
   `TRUST_PROXY`; caso contrário, todos os clientes compartilham o IP do proxy.
 
-O Observe é configurado em `AppModule` e é registrado mesmo sem
-`OBSERVE_APP_KEY`/`OBSERVE_APP_SECRET`, usando valores de exemplo; revise suas
-credenciais e política de telemetria antes do uso. Renovação e revogação de
+O Observe é configurado em `AppModule` e fica habilitado somente quando
+`OBSERVE_APP_KEY` e `OBSERVE_APP_SECRET` estão definidas; sem elas, não grava
+nem envia telemetria. Definir apenas uma das duas impede a inicialização.
+Revise a política de telemetria antes de habilitá-lo. Renovação e revogação de
 sessão, proteção de brute force por conta (além do limite por IP) e a
 configuração de produção ainda precisam ser avaliadas.

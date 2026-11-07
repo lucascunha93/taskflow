@@ -1,4 +1,4 @@
-import { parseCorsOrigins, validateEnvironment } from './environment.js';
+import { observeOptions, parseCorsOrigins, validateEnvironment } from './environment.js';
 
 describe('validateEnvironment', () => {
   const valid = {
@@ -11,6 +11,11 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment({
       ...valid, PORT: '8080', TRUST_PROXY: '1', CORS_ORIGINS: 'https://app.example.test, http://localhost:4200',
     })).not.toThrow();
+  });
+
+  it('requires the Observe credentials as a pair', () => {
+    expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key' })).toThrow(/OBSERVE_APP_KEY/);
+    expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key', OBSERVE_APP_SECRET: 'secret' })).not.toThrow();
   });
 
   it('reports every invalid value at once', () => {
@@ -32,5 +37,17 @@ describe('parseCorsOrigins', () => {
     for (const value of ['*', 'https://app.example.test/', 'https://app.example.test/path', 'ftp://files.example.test']) {
       expect(() => parseCorsOrigins(value)).toThrow(/CORS_ORIGINS/);
     }
+  });
+});
+
+describe('observeOptions', () => {
+  it('disables telemetry without credentials instead of using placeholders', () => {
+    expect(observeOptions({})).toEqual({ enabled: false, serviceId: 'api' });
+    expect(observeOptions({ OBSERVE_APP_KEY: ' ', OBSERVE_APP_SECRET: 'secret' })).toEqual({ enabled: false, serviceId: 'api' });
+  });
+
+  it('enables telemetry only with both credentials', () => {
+    expect(observeOptions({ OBSERVE_APP_KEY: 'key', OBSERVE_APP_SECRET: 'secret' }))
+      .toEqual({ enabled: true, appKey: 'key', appSecret: 'secret', serviceId: 'api' });
   });
 });
