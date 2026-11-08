@@ -5,11 +5,13 @@ import request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TasksController } from '../src/tasks/tasks.controller.js';
+import { ObjectStorageService } from '../src/storage/object-storage.service.js';
 import { NotificationsService } from '../src/notifications/notifications.service.js';
 import { ActivityService } from '../src/activity/activity.service.js';
 import { TasksService } from '../src/tasks/tasks.service.js';
 
 describe('Task summary (HTTP with Prisma stub)', () => {
+  const storage = { deleteQuietly: vi.fn().mockResolvedValue(undefined), isConfigured: () => false };
   const orgA = '11111111-1111-4111-8111-111111111111';
   const orgB = '22222222-2222-4222-8222-222222222222';
   const userA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -60,6 +62,7 @@ describe('Task summary (HTTP with Prisma stub)', () => {
       controllers: [TasksController],
       providers: [
         TasksService, JwtAuthGuard,
+        { provide: ObjectStorageService, useValue: storage },
         { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },
         { provide: ActivityService, useValue: { record: vi.fn() } },
         { provide: PrismaService, useValue: {

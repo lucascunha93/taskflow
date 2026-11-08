@@ -43,8 +43,8 @@ describe('Projects', () => {
   });
 
   afterEach(() => {
-    for (const request of http.match((req) => req.url.endsWith('/members') || req.url.endsWith('/comments') || req.url.endsWith('/activity'))) {
-      if (!request.cancelled) request.flush(request.request.url.endsWith('/members') ? [] : { data: [], nextCursor: null });
+    for (const request of http.match((req) => ['/members', '/attachments', '/comments', '/activity'].some((end) => req.url.endsWith(end)))) {
+      if (!request.cancelled) request.flush(['/members', '/attachments'].some((end) => request.request.url.endsWith(end)) ? [] : { data: [], nextCursor: null });
     }
     http.verify();
   });

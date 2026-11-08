@@ -1,4 +1,4 @@
-export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project';
+export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project' | 'attachment';
 
 /**
  * Alteração registrada no histórico. A descrição registra apenas que mudou

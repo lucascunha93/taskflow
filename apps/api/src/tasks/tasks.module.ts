@@ -7,10 +7,12 @@ import { TasksController } from './tasks.controller.js';
 import { TasksService } from './tasks.service.js';
 import { TaskCommentsController } from './comments/task-comments.controller.js';
 import { TaskCommentsService } from './comments/task-comments.service.js';
+import { TaskAttachmentsController } from './attachments/task-attachments.controller.js';
+import { TaskAttachmentsService } from './attachments/task-attachments.service.js';
 
 @Module({
   imports: [AuthModule, ActivityModule, NotificationsModule],
-  controllers: [TasksController, TaskCommentsController],
-  providers: [TasksService, TaskCommentsService],
+  controllers: [TasksController, TaskCommentsController, TaskAttachmentsController],
+  providers: [TasksService, TaskCommentsService, TaskAttachmentsService],
 })
 export class TasksModule {}

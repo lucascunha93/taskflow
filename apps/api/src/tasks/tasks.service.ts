@@ -16,6 +16,7 @@ import { taskDateBound } from './task-date-range.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { taskChanges } from '../activity/task-changes.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { ObjectStorageService } from '../storage/object-storage.service.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -56,6 +57,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly notifications: NotificationsService,
+    private readonly storage: ObjectStorageService,
   ) {}
 
   async summary(organizationId: string, userId: string) {
@@ -340,6 +342,12 @@ export class TasksService {
         where: { id: taskId, organizationId, version, organization: { memberships: { some: { userId } } } },
         select: { title: true },
       });
+      // Trava a tarefa antes de ler os anexos: um envio simultâneo espera esta
+      // transação e falha na chave estrangeira, sem deixar arquivo órfão.
+      if (before) await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${taskId}::uuid FOR UPDATE`;
+      const attachments = before
+        ? await tx.taskAttachment.findMany({ where: { taskId, organizationId }, select: { storageKey: true } })
+        : [];
       const result = await tx.task.deleteMany({
         where: {
           id: taskId,
@@ -348,15 +356,17 @@ export class TasksService {
           organization: { memberships: { some: { userId } } },
         },
       });
-      if (result.count === 0) return false;
+      if (result.count === 0) return null;
       // A tarefa não existe mais: a atividade guarda apenas o título.
       await this.activity.record(tx, {
         organizationId, taskId: null, taskTitle: before?.title ?? 'Tarefa excluída', actorId: userId, type: 'TASK_DELETED',
       });
-      return true;
+      return attachments.map((item) => item.storageKey);
     });
 
     if (removed) {
+      // Os registros foram removidos em cascata; os arquivos saem após o commit.
+      await this.storage.deleteQuietly(removed);
       return;
     }
 

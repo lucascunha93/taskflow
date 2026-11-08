@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -16,6 +17,7 @@ import { PrismaModule } from '../src/prisma/prisma.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TasksModule } from '../src/tasks/tasks.module.js';
 import { ProjectsModule } from '../src/projects/projects.module.js';
+import { StorageModule } from '../src/storage/storage.module.js';
 
 type TestUser = { id: string; email: string; token: string };
 
@@ -26,6 +28,11 @@ describe('HTTP integration with isolated PostgreSQL', () => {
   const organizationIds: string[] = [];
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousJwtSecret = process.env.JWT_SECRET;
+  const s3Keys = ['S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID',
+    'S3_SECRET_ACCESS_KEY', 'S3_FORCE_PATH_STYLE', 'S3_CREATE_BUCKET'] as const;
+  const previousS3 = Object.fromEntries(s3Keys.map((key) => [key, process.env[key]]));
+  let s3: S3Client;
+  const s3Bucket = 'taskflow-integration-test';
   let app: INestApplication;
   let prisma: PrismaService;
   let owner: TestUser;
@@ -82,8 +89,28 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     }
     process.env.DATABASE_URL = raw;
     process.env.JWT_SECRET = `integration-only-${randomUUID()}-${randomUUID()}`;
+
+    // Armazenamento S3 dedicado aos testes, com as mesmas salvaguardas do banco.
+    const s3Url = process.env.TASKFLOW_INTEGRATION_S3_URL;
+    const s3AccessKey = process.env.TASKFLOW_INTEGRATION_S3_ACCESS_KEY;
+    const s3Secret = process.env.TASKFLOW_INTEGRATION_S3_SECRET;
+    if (!s3Url || !s3AccessKey || !s3Secret) {
+      throw new Error('Defina TASKFLOW_INTEGRATION_S3_URL, TASKFLOW_INTEGRATION_S3_ACCESS_KEY e TASKFLOW_INTEGRATION_S3_SECRET.');
+    }
+    const parsedS3 = new URL(s3Url);
+    if (parsedS3.hostname !== '127.0.0.1' || !parsedS3.port || parsedS3.port === '8333' || parsedS3.port === '9000') {
+      throw new Error('O S3 de integração deve ser local (127.0.0.1) e em porta diferente das usadas em desenvolvimento.');
+    }
+    Object.assign(process.env, {
+      S3_ENDPOINT: parsedS3.origin, S3_PUBLIC_ENDPOINT: parsedS3.origin, S3_REGION: 'us-east-1', S3_BUCKET: s3Bucket,
+      S3_ACCESS_KEY_ID: s3AccessKey, S3_SECRET_ACCESS_KEY: s3Secret, S3_FORCE_PATH_STYLE: 'true', S3_CREATE_BUCKET: 'true',
+    });
+    s3 = new S3Client({
+      endpoint: parsedS3.origin, region: 'us-east-1', forcePathStyle: true,
+      credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3Secret },
+    });
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, OrganizationsModule, TasksModule, ProjectsModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, OrganizationsModule, TasksModule, ProjectsModule],
     })
       // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
       .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
@@ -127,6 +154,11 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       else process.env.DATABASE_URL = previousDatabaseUrl;
       if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
       else process.env.JWT_SECRET = previousJwtSecret;
+      for (const key of s3Keys) {
+        if (previousS3[key] === undefined) delete process.env[key];
+        else process.env[key] = previousS3[key];
+      }
+      s3?.destroy();
     }
   });
 
@@ -445,6 +477,64 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     expect(kept.body).toMatchObject({ projectId: null, project: null });
     await request(app.getHttpServer()).delete(`${path(orgA)}/${inProject.body.id}?version=${kept.body.version}`)
       .set('Authorization', auth(owner)).expect(204);
+  });
+
+  it('stores attachments in S3, serves them by signed URL inside the tenant and cleans them up', async () => {
+    const attachments = (task: string) => `${path(orgA)}/${task}/attachments`;
+    const objectExists = async (key: string) => {
+      try {
+        await s3.send(new HeadObjectCommand({ Bucket: s3Bucket, Key: key }));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const task = await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner))
+      .send({ title: 'Task with files' }).expect(201);
+    const pdf = Buffer.from(`%PDF-1.7\nconteúdo ${runId}\n`);
+    const uploaded = await request(app.getHttpServer()).post(attachments(task.body.id)).set('Authorization', auth(member))
+      .attach('file', pdf, { filename: 'relatório final.pdf', contentType: 'text/html' }).expect(201);
+    expect(uploaded.body).toMatchObject({
+      fileName: 'relatório final.pdf', contentType: 'application/pdf', size: pdf.length, uploader: { id: member.id },
+    });
+    const stored = await prisma.taskAttachment.findUniqueOrThrow({ where: { id: uploaded.body.id } });
+    expect(stored.storageKey).toBe(`organizations/${orgA}/tasks/${task.body.id}/${uploaded.body.id}`);
+    expect(await objectExists(stored.storageKey)).toBe(true);
+
+    await request(app.getHttpServer()).post(attachments(task.body.id)).set('Authorization', auth(owner))
+      .attach('file', Buffer.from('<svg onload="alert(1)"/>'), 'desenho.svg').expect(415);
+    await request(app.getHttpServer()).get(attachments(task.body.id)).set('Authorization', auth(other)).expect(404);
+    await request(app.getHttpServer()).get(`${path(orgB)}/${taskB}/attachments/${uploaded.body.id}/download`)
+      .set('Authorization', auth(other)).expect(404);
+
+    const link = await request(app.getHttpServer()).get(`${attachments(task.body.id)}/${uploaded.body.id}/download`)
+      .set('Authorization', auth(admin)).expect(200);
+    const downloaded = await fetch(link.body.url);
+    expect(downloaded.status).toBe(200);
+    expect(Buffer.from(await downloaded.arrayBuffer()).equals(pdf)).toBe(true);
+    expect(downloaded.headers.get('content-type')).toBe('application/pdf');
+    expect(downloaded.headers.get('content-disposition')).toContain("filename*=UTF-8''relat%C3%B3rio%20final.pdf");
+    expect((await fetch(link.body.url.replace(uploaded.body.id, randomUUID()))).status).toBe(403);
+    expect((await fetch(`${process.env.S3_ENDPOINT}/${s3Bucket}/${stored.storageKey}`)).status).toBe(403);
+
+    await request(app.getHttpServer()).delete(`${attachments(task.body.id)}/${uploaded.body.id}`)
+      .set('Authorization', auth(candidate)).expect(404);
+    const second = await request(app.getHttpServer()).post(attachments(task.body.id)).set('Authorization', auth(owner))
+      .attach('file', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]), 'foto.png').expect(201);
+    await request(app.getHttpServer()).delete(`${attachments(task.body.id)}/${second.body.id}`)
+      .set('Authorization', auth(member)).expect(403);
+    await request(app.getHttpServer()).delete(`${attachments(task.body.id)}/${uploaded.body.id}`)
+      .set('Authorization', auth(member)).expect(204);
+    expect(await objectExists(stored.storageKey)).toBe(false);
+    const history = await request(app.getHttpServer()).get(`${path(orgA)}/${task.body.id}/activity`)
+      .set('Authorization', auth(owner)).expect(200);
+    expect(history.body.data.slice(0, 3).map((item: { type: string }) => item.type))
+      .toEqual(['ATTACHMENT_REMOVED', 'ATTACHMENT_ADDED', 'ATTACHMENT_ADDED']);
+
+    const secondKey = (await prisma.taskAttachment.findUniqueOrThrow({ where: { id: second.body.id } })).storageKey;
+    await request(app.getHttpServer()).delete(`${path(orgA)}/${task.body.id}?version=1`).set('Authorization', auth(owner)).expect(204);
+    expect(await prisma.taskAttachment.count({ where: { taskId: task.body.id } })).toBe(0);
+    expect(await objectExists(secondKey)).toBe(false);
   });
 
   it('paginates, filters, sorts and reads real tasks and aggregates the entire tenant', async () => {

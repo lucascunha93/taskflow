@@ -1,7 +1,8 @@
 import { TaskStatus, statusLabel } from '../tasks/task.models';
 
-export type ActivityType = 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED' | 'COMMENT_ADDED';
-export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project';
+export type ActivityType =
+  | 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED' | 'COMMENT_ADDED' | 'ATTACHMENT_ADDED' | 'ATTACHMENT_REMOVED';
+export type ChangedField = 'title' | 'description' | 'status' | 'assignee' | 'dueDate' | 'project' | 'attachment';
 
 export interface ActivityChange {
   field: ChangedField;
@@ -24,8 +25,10 @@ export interface ActivityPage {
   nextCursor: string | null;
 }
 
-const TYPES: readonly ActivityType[] = ['TASK_CREATED', 'TASK_UPDATED', 'TASK_DELETED', 'COMMENT_ADDED'];
-const FIELDS: readonly ChangedField[] = ['title', 'description', 'status', 'assignee', 'dueDate', 'project'];
+const TYPES: readonly ActivityType[] = [
+  'TASK_CREATED', 'TASK_UPDATED', 'TASK_DELETED', 'COMMENT_ADDED', 'ATTACHMENT_ADDED', 'ATTACHMENT_REMOVED',
+];
+const FIELDS: readonly ChangedField[] = ['title', 'description', 'status', 'assignee', 'dueDate', 'project', 'attachment'];
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isNullableText = (value: unknown): value is string | null => value === null || typeof value === 'string';
@@ -65,6 +68,7 @@ export function activityPageFromResponse(value: unknown): ActivityPage {
 const FIELD_LABELS: Readonly<Record<ChangedField, string>> = {
   title: 'o título', description: 'a descrição', status: 'o status', assignee: 'o responsável', dueDate: 'o prazo',
   project: 'o projeto',
+  attachment: 'o anexo',
 };
 
 function valueLabel(field: ChangedField, value: string | null): string {
@@ -90,6 +94,14 @@ export function describeActivity(activity: Activity, includeTitle = true): strin
     case 'TASK_CREATED': return includeTitle ? `criou a tarefa${title}` : 'criou a tarefa';
     case 'TASK_DELETED': return `excluiu a tarefa${title}`;
     case 'COMMENT_ADDED': return includeTitle ? `comentou em${title}` : 'comentou';
+    case 'ATTACHMENT_ADDED': {
+      const file = activity.changes?.[0]?.to ?? 'um arquivo';
+      return includeTitle ? `anexou “${file}” em${title}` : `anexou “${file}”`;
+    }
+    case 'ATTACHMENT_REMOVED': {
+      const file = activity.changes?.[0]?.from ?? 'um arquivo';
+      return includeTitle ? `removeu o anexo “${file}” de${title}` : `removeu o anexo “${file}”`;
+    }
     case 'TASK_UPDATED': {
       const changes = activity.changes ?? [];
       const target = includeTitle ? `${title}:` : '';

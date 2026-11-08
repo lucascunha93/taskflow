@@ -126,6 +126,16 @@ atividades de tarefas excluídas aparecem apenas como texto. "Atualizar" recarre
 o histórico; o dashboard também o recarrega após uma alteração feita pelo
 detalhe.
 
+## Anexos
+
+O detalhe da tarefa lista os anexos com nome, tamanho, quem enviou e quando.
+"Anexar arquivo" verifica no navegador a extensão e o limite de 10 MB antes de
+enviar, mostra o progresso e informa as recusas da API (tipo, conteúdo
+incompatível, limite de 20 anexos ou armazenamento indisponível). O nome do
+arquivo inicia o download: a aplicação pede à API uma URL assinada de curta
+duração e o navegador baixa o arquivo, sem exibi-lo na página. Quem enviou,
+proprietários e administradores podem excluir, com confirmação.
+
 ## Projetos e quadros
 
 Em `/projects`, a organização ativa lista seus projetos com a quantidade de

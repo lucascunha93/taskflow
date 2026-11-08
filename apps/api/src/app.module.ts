@@ -3,6 +3,7 @@ import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { StorageModule } from './storage/storage.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { observeOptions, validateEnvironment } from './config/environment.js';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -17,6 +18,7 @@ import { ProjectsModule } from './projects/projects.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
+    StorageModule,
     AuthModule,
     // Avaliado depois do ConfigModule carregar o .env. Sem o par de credenciais,
     // o Observe fica desabilitado: não grava nem envia telemetria.

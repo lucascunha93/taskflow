@@ -1,0 +1,50 @@
+<section class="attachments" aria-labelledby="attachments-title">
+  <div class="heading">
+    <h3 id="attachments-title">Anexos</h3>
+    @if (!loading() && !loadError()) {
+      <label class="tf-button tf-button--subtle upload" [class.upload--disabled]="uploadPercent() !== null">
+        Anexar arquivo
+        <input type="file" class="file-input" [accept]="accept" [disabled]="uploadPercent() !== null" (change)="selected($event)" />
+      </label>
+    }
+  </div>
+  <p class="hint">Até 10 MB por arquivo: imagens, PDF, documentos, planilhas, apresentações, texto, CSV e ZIP.</p>
+  @if (uploadPercent() !== null) {
+    <div class="progress" role="status">
+      <span>Enviando “{{ uploadName() }}”… {{ uploadPercent() }}%</span>
+      <progress max="100" [value]="uploadPercent()" [attr.aria-label]="'Progresso do envio de ' + uploadName()"></progress>
+    </div>
+  }
+  @if (actionError()) { <p class="message" role="alert">{{ actionError() }}</p> }
+  @if (loading()) {
+    <p role="status">Carregando anexos…</p>
+  } @else if (loadError()) {
+    <p class="message" role="alert">{{ loadError() }}</p>
+  } @else if (attachments().length === 0) {
+    <p class="empty">Nenhum anexo.</p>
+  } @else {
+    <ul class="attachment-list">
+      @for (attachment of attachments(); track attachment.id) {
+        <li class="attachment">
+          <div class="info">
+            <button type="button" class="link-button name" [disabled]="busyId() !== null" (click)="download(attachment)"
+              [attr.aria-label]="'Baixar ' + attachment.fileName">{{ attachment.fileName }}</button>
+            <span class="meta">{{ formatBytes(attachment.size) }} · {{ attachment.uploader.name }} · {{ attachment.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+          @if (canDelete(attachment)) {
+            <div class="actions">
+              @if (confirmingId() === attachment.id) {
+                <span>Excluir?</span>
+                <button type="button" class="link-button danger" [disabled]="busyId() === attachment.id" (click)="remove(attachment)">Confirmar</button>
+                <button type="button" class="link-button" (click)="confirmingId.set(null)">Cancelar</button>
+              } @else {
+                <button type="button" class="link-button" [disabled]="busyId() !== null" (click)="confirmingId.set(attachment.id)"
+                  [attr.aria-label]="'Excluir ' + attachment.fileName">Excluir</button>
+              }
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

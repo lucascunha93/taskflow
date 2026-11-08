@@ -20,6 +20,11 @@ não existir. Preencha valores próprios:
 | `REFRESH_TOKEN_TTL_DAYS` | Opcional. Validade do refresh token, de 1 a 90 dias; padrão `7`. Renovada a cada uso. |
 | `REFRESH_COOKIE_SECURE` | Opcional. `true` (padrão) ou `false`. Use `false` somente em desenvolvimento HTTP quando o navegador recusar cookies `Secure` em `localhost`. |
 | `REFRESH_COOKIE_PATH` | Opcional. Caminho do cookie; padrão `/auth`. Deve corresponder ao caminho público dos endpoints de autenticação (ex.: `/api/auth`). |
+| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Opcionais, mas juntas: habilitam anexos em armazenamento compatível com S3. Sem elas, os endpoints de anexos respondem 503. |
+| `S3_ENDPOINT` | Endpoint usado pela API (ex.: `http://127.0.0.1:8333`); omitido, usa a AWS. |
+| `S3_PUBLIC_ENDPOINT` | Endereço acessível pelo navegador para as URLs assinadas de download; padrão: `S3_ENDPOINT`. |
+| `S3_REGION`, `S3_FORCE_PATH_STYLE` | Região (padrão `us-east-1`) e endereçamento por caminho (`true` para SeaweedFS/MinIO). |
+| `S3_CREATE_BUCKET` | `true` cria o bucket ausente ao iniciar; use somente em desenvolvimento. |
 | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | Par de configuração do NestJS Observe, quando utilizado. |
 
 As variáveis são validadas na inicialização (`src/config/environment.ts`): um
@@ -74,12 +79,13 @@ Observe: ele não valida conexão real, migrations ou isolamento no PostgreSQL.
 ## Integração com PostgreSQL real
 
 A suíte `test:integration` usa os módulos reais de autenticação, organizações,
-tarefas e Prisma por HTTP, sem iniciar o Observe. Ela cobre isolamento,
-concorrência, transações e integridade referencial. Exige banco dedicado:
+tarefas, projetos, armazenamento e Prisma por HTTP, sem iniciar o Observe. Ela
+cobre isolamento, concorrência, transações, integridade referencial e anexos
+em um S3 real. Exige banco e S3 dedicados:
 **não use um banco de desenvolvimento, produção ou de outra pessoa**. O
 arquivo `compose.integration.yaml` é independente do Compose de desenvolvimento,
-usa PostgreSQL 17 e armazenamento temporário em memória, sem volume persistente.
-Ao parar o contêiner, os dados desse banco de teste são perdidos.
+usa PostgreSQL 17 e SeaweedFS (S3) com armazenamento temporário em memória, sem
+volume persistente. Ao parar os contêineres, os dados de teste são perdidos.
 
 Exemplo em PowerShell, na raiz, com Docker e daemon disponíveis:
 
@@ -87,6 +93,9 @@ Exemplo em PowerShell, na raiz, com Docker e daemon disponíveis:
 $project = "taskflow-it-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
 $env:TASKFLOW_TEST_PORT = "55432" # escolha outra porta livre se necessário
 $env:TASKFLOW_TEST_PASSWORD = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+$env:TASKFLOW_TEST_S3_PORT = "58333" # outra porta livre se necessário; não use 8333 nem 9000
+$env:TASKFLOW_TEST_S3_ACCESS_KEY = "it" + [guid]::NewGuid().ToString('N').Substring(0, 18)
+$env:TASKFLOW_TEST_S3_SECRET = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
 docker compose -p $project -f .\compose.integration.yaml up -d --wait
 ```
 
@@ -100,6 +109,9 @@ $previousDatabaseUrl = $env:DATABASE_URL
 $env:TASKFLOW_INTEGRATION_URL = "postgresql://taskflow_test:$($env:TASKFLOW_TEST_PASSWORD)@127.0.0.1:$($env:TASKFLOW_TEST_PORT)/taskflow_integration_test"
 $env:DATABASE_URL = $env:TASKFLOW_INTEGRATION_URL
 $env:TASKFLOW_INTEGRATION_CONFIRM = "isolated-test-database"
+$env:TASKFLOW_INTEGRATION_S3_URL = "http://127.0.0.1:$($env:TASKFLOW_TEST_S3_PORT)"
+$env:TASKFLOW_INTEGRATION_S3_ACCESS_KEY = $env:TASKFLOW_TEST_S3_ACCESS_KEY
+$env:TASKFLOW_INTEGRATION_S3_SECRET = $env:TASKFLOW_TEST_S3_SECRET
 npm run db:generate --workspace api
 npm run db:migrate:deploy --workspace api
 npm run test:integration --workspace api
@@ -122,6 +134,7 @@ docker compose -p $project -f .\compose.integration.yaml down
 if ($null -eq $previousDatabaseUrl) { Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue }
 else { $env:DATABASE_URL = $previousDatabaseUrl }
 Remove-Item Env:TASKFLOW_INTEGRATION_URL, Env:TASKFLOW_INTEGRATION_CONFIRM, Env:TASKFLOW_TEST_PASSWORD, Env:TASKFLOW_TEST_PORT -ErrorAction SilentlyContinue
+Remove-Item Env:TASKFLOW_TEST_S3_PORT, Env:TASKFLOW_TEST_S3_ACCESS_KEY, Env:TASKFLOW_TEST_S3_SECRET, Env:TASKFLOW_INTEGRATION_S3_URL, Env:TASKFLOW_INTEGRATION_S3_ACCESS_KEY, Env:TASKFLOW_INTEGRATION_S3_SECRET -ErrorAction SilentlyContinue
 ```
 
 Para executar toda a validação, rode também os comandos de API e frontend da
@@ -140,6 +153,9 @@ de produção.
 | POST | `/auth/login` | Não |
 | GET, PATCH | `/auth/me` | JWT |
 | POST | `/auth/refresh`, `/auth/logout` | Cookie de refresh + `X-TaskFlow-Request: 1` |
+| GET, POST | `/organizations/:organizationId/tasks/:taskId/attachments` | JWT |
+| GET | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId/download` | JWT |
+| DELETE | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId` | JWT |
 | PUT | `/auth/me/password` | JWT |
 | DELETE | `/auth/me/sessions` | JWT |
 | POST, GET | `/organizations` | JWT |
@@ -274,6 +290,44 @@ operação também é desfeita. Cada item tem `id`, `type` (`TASK_CREATED`,
   histórico da organização do mais recente para o mais antigo; `limit` vai de 1
   a 100. `GET .../tasks/:taskId/activity` (padrão 50) lista o de uma tarefa
   existente. Ambos retornam `{ data, nextCursor }` e exigem associação (404).
+
+### Anexos
+
+Os arquivos ficam em um armazenamento compatível com S3; o banco guarda os
+metadados em `task_attachments`, ligada à tarefa por `(taskId, organizationId)`.
+Qualquer membro lista, envia e baixa; quem enviou, OWNER e ADMIN excluem.
+Organização inacessível ou tarefa de outra organização retornam 404.
+
+- `POST .../attachments` recebe `multipart/form-data` com um único campo `file`.
+  O limite é de 10 MB (acima disso, 413) e de 20 anexos por tarefa (409).
+- Tipos aceitos, pela extensão: `png`, `jpg`, `jpeg`, `gif`, `webp`, `pdf`,
+  `txt`, `md`, `csv`, `zip`, `docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`,
+  `doc`, `xls` e `ppt`. Outros tipos, inclusive HTML e SVG, retornam 415.
+- O tipo enviado pelo navegador é ignorado. O conteúdo precisa ter a assinatura
+  binária da extensão (texto precisa ser UTF-8 sem bytes nulos), caso contrário
+  retorna 415, e o arquivo é servido com o tipo canônico da extensão.
+- O nome é limpo (sem caminho e sem caracteres de controle, até 255
+  caracteres). A chave no storage é `organizations/<org>/tasks/<tarefa>/<uuid>`
+  e nunca usa o nome enviado.
+- O objeto é gravado antes do registro. Se a gravação no banco falhar, o objeto
+  é removido.
+- `GET .../download` retorna `{ url, expiresAt }`, uma URL assinada válida por 60
+  segundos que baixa o arquivo como `attachment`, com o nome original (RFC 6266).
+  O bucket não tem acesso anônimo.
+- `DELETE` remove o registro e, em seguida, o objeto. Excluir a tarefa remove
+  os registros em cascata e os objetos depois do commit; a linha da tarefa é
+  travada antes da leitura das chaves, para que um envio simultâneo não deixe
+  arquivo órfão. Uma falha ao remover um objeto já sem registro é registrada no
+  log.
+- O histórico registra `ATTACHMENT_ADDED` e `ATTACHMENT_REMOVED`, com
+  `{ field: "attachment" }` e o nome do arquivo.
+- Sem `S3_BUCKET` e credenciais, os endpoints de anexos respondem 503.
+
+No Compose local, o serviço `object-storage` usa SeaweedFS
+(`chrislusf/seaweedfs:4.50`), porque a MinIO deixou de publicar imagens
+comunitárias atualizadas. O código usa apenas a API S3, então em produção pode
+ser AWS S3, Cloudflare R2 ou outro serviço compatível. Revise backup,
+criptografia e política de retenção do bucket antes de publicar.
 
 ### Projetos
 

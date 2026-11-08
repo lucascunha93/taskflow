@@ -1,10 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksService } from './tasks.service.js';
+import { ObjectStorageService } from '../storage/object-storage.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 
 describe('Task summary', () => {
+  const storage = { deleteQuietly: vi.fn().mockResolvedValue(undefined), isConfigured: () => false };
   const organizationId = 'organization-a';
   const userId = 'user-a';
   let service: TasksService;
@@ -20,6 +22,7 @@ describe('Task summary', () => {
       providers: [
         TasksService,
         { provide: PrismaService, useValue: prisma },
+        { provide: ObjectStorageService, useValue: storage },
         { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },
         { provide: ActivityService, useValue: { record: vi.fn() } },
       ],

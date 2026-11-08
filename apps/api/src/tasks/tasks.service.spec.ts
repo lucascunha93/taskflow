@@ -4,14 +4,18 @@ import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { ObjectStorageService } from '../storage/object-storage.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
 describe('TasksService', () => {
+  const storage = { deleteQuietly: vi.fn().mockResolvedValue(undefined), isConfigured: () => false };
   let service: TasksService;
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     membership: { findUnique: ReturnType<typeof vi.fn> };
     project: { findFirst: ReturnType<typeof vi.fn> };
+    $queryRaw: ReturnType<typeof vi.fn>;
+    taskAttachment: { findMany: ReturnType<typeof vi.fn> };
     task: {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
@@ -36,6 +40,8 @@ describe('TasksService', () => {
         typeof operations === 'function' ? operations(prisma) : Promise.all(operations)),
       membership: { findUnique: vi.fn() },
       project: { findFirst: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      taskAttachment: { findMany: vi.fn().mockResolvedValue([]) },
       task: {
         create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(),
         deleteMany: vi.fn(), updateManyAndReturn: vi.fn(),
@@ -46,6 +52,7 @@ describe('TasksService', () => {
         TasksService,
         { provide: PrismaService, useValue: prisma },
         { provide: ActivityService, useValue: activity },
+        { provide: ObjectStorageService, useValue: storage },
         { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
@@ -425,6 +432,24 @@ describe('TasksService', () => {
     expect(activity.record).toHaveBeenCalledWith(prisma, {
       organizationId, taskId: null, taskTitle: 'Removed task', actorId: userId, type: 'TASK_DELETED',
     });
+    expect(storage.deleteQuietly).toHaveBeenCalledWith([]);
+  });
+
+  it('locks the task and removes its attachment objects only after a successful delete', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'requester' });
+    prisma.task.findFirst.mockResolvedValue({ title: 'With files' });
+    prisma.taskAttachment.findMany.mockResolvedValue([{ storageKey: 'k1' }, { storageKey: 'k2' }]);
+    prisma.task.deleteMany.mockResolvedValueOnce({ count: 1 });
+    await service.remove(organizationId, 'task-a', userId, 1);
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+    expect(prisma.taskAttachment.findMany).toHaveBeenCalledWith({ where: { taskId: 'task-a', organizationId }, select: { storageKey: true } });
+    expect(storage.deleteQuietly).toHaveBeenCalledWith(['k1', 'k2']);
+
+    storage.deleteQuietly.mockClear();
+    prisma.task.deleteMany.mockResolvedValueOnce({ count: 0 });
+    prisma.task.findFirst.mockResolvedValueOnce({ title: 'With files' }).mockResolvedValueOnce({ id: 'task-a', version: 2 });
+    await expect(service.remove(organizationId, 'task-a', userId, 1)).rejects.toMatchObject({ status: 409 });
+    expect(storage.deleteQuietly).not.toHaveBeenCalled();
   });
 
   it('does not delete for a requester without an organization membership', async () => {

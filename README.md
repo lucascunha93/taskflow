@@ -14,8 +14,8 @@ não está configurada.
   membros com verificação de permissões.
 - Criação, listagem, consulta, atualização e exclusão de tarefas por organização,
   com validação de associação, controle de versão, filtros e paginação.
-- Comentários, histórico de alterações, notificações no app e projetos com
-  quadro por status.
+- Comentários, anexos (armazenamento compatível com S3), histórico de
+  alterações, notificações no app e projetos com quadro por status.
 - Sessão com access token em memória e refresh token rotativo em cookie
   `HttpOnly`.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.
@@ -51,6 +51,10 @@ existentes:
 4. Se usar o banco do Compose, execute `docker compose up -d postgres`.
    Aguarde o health check antes de continuar. Um volume já inicializado
    mantém os dados e credenciais anteriores; alterar o `.env` não os atualiza.
+   Para anexos, defina `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` no `.env` da
+   raiz, repita-os com as demais variáveis `S3_*` em `apps/api/.env` (veja o
+   exemplo) e execute `docker compose up -d object-storage`. Sem isso, o
+   restante da aplicação funciona e os anexos ficam indisponíveis.
 5. Execute `npm run db:generate --workspace api` e, para um banco novo ou
    depois de avaliar o estado do banco existente,
    `npm run db:migrate:deploy --workspace api`.

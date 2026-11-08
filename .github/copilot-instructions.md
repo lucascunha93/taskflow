@@ -790,7 +790,7 @@ Os indicadores devem ser calculados a partir de dados reais.
 - Histórico. (implementado, inclui atividades recentes no dashboard)
 - Notificações. (implementado: no app, sem e-mail ou tempo real)
 - Projetos e quadros. (implementado)
-- Anexos.
+- Anexos. (implementado: armazenamento compatível com S3)
 - Funcionalidades SaaS.
 - Aplicação mobile.
 - Funcionamento offline e sincronização.

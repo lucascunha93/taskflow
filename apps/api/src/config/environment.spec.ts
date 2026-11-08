@@ -22,6 +22,15 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment({ ...valid, REFRESH_COOKIE_PATH: 'auth' })).toThrow(/REFRESH_COOKIE_PATH/);
   });
 
+  it('validates the attachment storage settings', () => {
+    const s3 = { S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's' };
+    expect(() => validateEnvironment({ ...valid, ...s3, S3_ENDPOINT: 'http://127.0.0.1:8333', S3_FORCE_PATH_STYLE: 'true' })).not.toThrow();
+    expect(() => validateEnvironment({ ...valid, S3_BUCKET: 'b' })).toThrow(/S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY/);
+    expect(() => validateEnvironment({ ...valid, ...s3, S3_ENDPOINT: 'ftp://x' })).toThrow(/S3_ENDPOINT/);
+    expect(() => validateEnvironment({ ...valid, ...s3, S3_PUBLIC_ENDPOINT: 'http://x/path' })).toThrow(/S3_PUBLIC_ENDPOINT/);
+    expect(() => validateEnvironment({ ...valid, ...s3, S3_CREATE_BUCKET: 'yes' })).toThrow(/S3_CREATE_BUCKET/);
+  });
+
   it('requires the Observe credentials as a pair', () => {
     expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key' })).toThrow(/OBSERVE_APP_KEY/);
     expect(() => validateEnvironment({ ...valid, OBSERVE_APP_KEY: 'key', OBSERVE_APP_SECRET: 'secret' })).not.toThrow();

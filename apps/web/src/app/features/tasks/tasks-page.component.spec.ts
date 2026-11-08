@@ -44,7 +44,7 @@ describe('TasksPageComponent', () => {
     for (const request of http.match((req) => req.url.endsWith('/comments') || req.url.endsWith('/activity'))) {
       if (!request.cancelled) request.flush({ data: [], nextCursor: null });
     }
-    for (const request of http.match((req) => req.url.endsWith('/projects'))) {
+    for (const request of http.match((req) => req.url.endsWith('/projects') || req.url.endsWith('/attachments'))) {
       if (!request.cancelled) request.flush([]);
     }
     fixture.destroy();

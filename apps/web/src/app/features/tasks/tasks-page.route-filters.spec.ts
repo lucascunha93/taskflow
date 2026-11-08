@@ -38,7 +38,7 @@ describe('TasksPageComponent route filters', () => {
   }
 
   afterEach(() => {
-    for (const request of http.match((req) => req.url.endsWith('/projects'))) {
+    for (const request of http.match((req) => req.url.endsWith('/projects') || req.url.endsWith('/attachments'))) {
       if (!request.cancelled) request.flush([]);
     }
     http.verify();

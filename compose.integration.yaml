@@ -14,3 +14,28 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+
+  # S3 descartável para os testes de anexos: dados apenas em memória.
+  s3-test:
+    image: chrislusf/seaweedfs:4.50
+    environment:
+      S3_ACCESS_KEY_ID: ${TASKFLOW_TEST_S3_ACCESS_KEY:?Defina uma chave de acesso exclusiva para testes}
+      S3_SECRET_ACCESS_KEY: ${TASKFLOW_TEST_S3_SECRET:?Defina um segredo exclusivo para testes}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ -z "$$S3_ACCESS_KEY_ID" ] || [ -z "$$S3_SECRET_ACCESS_KEY" ]; then
+          echo "Defina S3_ACCESS_KEY_ID e S3_SECRET_ACCESS_KEY para o armazenamento de anexos." >&2; exit 1
+        fi
+        printf '{"identities":[{"name":"taskflow","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' \
+          "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY" > /tmp/s3.json
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json -master.volumeSizeLimitMB=64 -volume.max=8
+    ports:
+      - "127.0.0.1:${TASKFLOW_TEST_S3_PORT:-58333}:8333"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8333/healthz > /dev/null"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

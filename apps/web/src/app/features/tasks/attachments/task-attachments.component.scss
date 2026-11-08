@@ -1,0 +1,36 @@
+.attachments {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+.heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+h3 { margin: 0; font-size: 1.0625rem; }
+.hint, .empty { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-small); }
+.upload { position: relative; cursor: pointer; }
+.upload:focus-within { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.upload--disabled { cursor: not-allowed; opacity: 0.6; }
+.file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.progress { display: grid; gap: var(--space-1); font-size: var(--font-size-small); }
+.progress progress { width: 100%; max-width: 420px; }
+.message { margin: 0; padding: var(--space-3); border-radius: var(--radius-medium); background: #fff2f1; color: #8c252e; }
+.attachment-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.attachment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+.info { display: grid; min-width: 0; gap: 2px; }
+.name { overflow-wrap: anywhere; text-align: left; }
+.meta { color: var(--color-text-secondary); font-size: var(--font-size-small); }
+.actions { display: flex; align-items: center; gap: var(--space-3); font-size: var(--font-size-small); }
+.link-button { padding: 0; border: 0; background: none; color: var(--color-primary); cursor: pointer; font-weight: 600; }
+.link-button:disabled { cursor: progress; opacity: 0.7; }
+.link-button.danger { color: #a92c36; }

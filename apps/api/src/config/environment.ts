@@ -45,6 +45,25 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     errors.push('REFRESH_COOKIE_PATH precisa ser um caminho iniciado por /.');
   }
 
+  // Armazenamento de anexos: opcional, mas bucket e credenciais vêm juntos.
+  const s3Required = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+  const s3Present = s3Required.filter((key) => text(key));
+  if (s3Present.length > 0 && s3Present.length < s3Required.length) {
+    errors.push(`Defina ${s3Required.join(', ')} juntas para habilitar anexos.`);
+  }
+  for (const key of ['S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT']) {
+    const value = text(key);
+    if (value !== undefined && !/^https?:\/\/[^\s/]+(?::\d+)?\/?$/.test(value)) {
+      errors.push(`${key} precisa ser uma URL http(s) sem caminho.`);
+    }
+  }
+  for (const key of ['S3_FORCE_PATH_STYLE', 'S3_CREATE_BUCKET']) {
+    const value = text(key);
+    if (value !== undefined && value !== 'true' && value !== 'false') {
+      errors.push(`${key} precisa ser true ou false.`);
+    }
+  }
+
   if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
     errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
   }

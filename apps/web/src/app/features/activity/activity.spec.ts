@@ -32,6 +32,10 @@ describe('activity descriptions', () => {
     expect(describeActivity({ ...base, type: 'TASK_CREATED', changes: null })).toBe('criou a tarefa “Relatório”');
     expect(describeActivity({ ...base, type: 'TASK_DELETED', taskId: null, changes: null })).toBe('excluiu a tarefa “Relatório”');
     expect(describeActivity({ ...base, type: 'COMMENT_ADDED', changes: null }, false)).toBe('comentou');
+    expect(describeActivity({ ...base, type: 'ATTACHMENT_ADDED', changes: [{ field: 'attachment', from: null, to: 'a.pdf' }] }))
+      .toBe('anexou “a.pdf” em “Relatório”');
+    expect(describeActivity({ ...base, type: 'ATTACHMENT_REMOVED', changes: [{ field: 'attachment', from: 'a.pdf', to: null }] }, false))
+      .toBe('removeu o anexo “a.pdf”');
   });
 
   it('rejects malformed responses', () => {
