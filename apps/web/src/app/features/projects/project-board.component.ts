@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../plans/plan.models';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -178,9 +179,9 @@ export class ProjectBoardComponent {
       },
       error: (error: unknown) => {
         this.createBusy.set(false);
-        this.createError.set(error instanceof HttpErrorResponse && error.status === 400
+        this.createError.set(planLimitMessage(error) ?? (error instanceof HttpErrorResponse && error.status === 400
           ? 'Dados inválidos ou projeto indisponível. Confira os campos.'
-          : 'Não foi possível confirmar a criação. Recarregue o quadro antes de tentar novamente.');
+          : 'Não foi possível confirmar a criação. Recarregue o quadro antes de tentar novamente.'));
       },
     }));
   }

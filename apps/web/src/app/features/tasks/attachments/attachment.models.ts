@@ -8,8 +8,12 @@ export interface TaskAttachment {
   uploader: { id: string; name: string };
 }
 
-/** Espelha a política da API; a validação definitiva acontece no servidor. */
-export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+/**
+ * Espelha a política da API; a validação definitiva acontece no servidor.
+ * 25 MB é o maior limite entre os planos; o limite do plano (10 MB no Gratuito)
+ * é verificado pela API, que responde com a mensagem do plano.
+ */
+export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 export const ATTACHMENT_EXTENSIONS = [
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'md', 'csv', 'zip',
   'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp', 'doc', 'xls', 'ppt',
@@ -42,12 +46,13 @@ export function localFileProblem(file: { name: string; size: number }): string |
     return `Tipo de arquivo não permitido. Use: ${ATTACHMENT_EXTENSIONS.join(', ')}.`;
   }
   if (file.size === 0) return 'O arquivo está vazio.';
-  if (file.size > ATTACHMENT_MAX_BYTES) return 'O arquivo excede o limite de 10 MB.';
+  if (file.size > ATTACHMENT_MAX_BYTES) return 'O arquivo excede o limite de 25 MB.';
   return null;
 }
 
 export function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
-  return `${(size / (1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB`;
 }

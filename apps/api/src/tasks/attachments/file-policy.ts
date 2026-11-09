@@ -1,6 +1,7 @@
 import { UnsupportedMediaTypeException } from '@nestjs/common';
 
-export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+/** Limite absoluto do envio (o maior entre os planos); o limite do plano é verificado no serviço. */
+export { MAX_FILE_BYTES as ATTACHMENT_MAX_BYTES } from '../../plans/plan-limits.js';
 export const ATTACHMENTS_PER_TASK = 20;
 
 type Signature = (bytes: Buffer) => boolean;

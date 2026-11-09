@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PlansService } from '../plans/plans.service.js';
 import { TasksService } from './tasks.service.js';
 import { ObjectStorageService } from '../storage/object-storage.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -21,6 +22,7 @@ describe('Task summary', () => {
     const module = await Test.createTestingModule({
       providers: [
         TasksService,
+        { provide: PlansService, useValue: { assertCanCreate: vi.fn(), assertCanStore: vi.fn(), assertCanOwnFreeOrganization: vi.fn() } },
         { provide: PrismaService, useValue: prisma },
         { provide: ObjectStorageService, useValue: storage },
         { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },

@@ -70,6 +70,7 @@ npm run build --workspace api
 npm run lint --workspace api
 npm run test --workspace api
 npm run test:e2e --workspace api
+npm run plan:set --workspace api -- <slug-da-organização> <FREE|PRO|BUSINESS>
 ```
 
 Os testes unitários verificam regras dos serviços e fazem requisições HTTP com
@@ -172,6 +173,8 @@ de produção.
 | GET, PATCH, DELETE | `/organizations/:organizationId/projects/:projectId` | JWT |
 | GET | `/notifications` | JWT |
 | POST | `/notifications/:notificationId/read`, `/notifications/read-all` | JWT |
+| GET | `/plans` | JWT |
+| GET | `/organizations/:organizationId/plan` | JWT |
 
 ### Refresh token
 
@@ -299,7 +302,9 @@ Qualquer membro lista, envia e baixa; quem enviou, OWNER e ADMIN excluem.
 Organização inacessível ou tarefa de outra organização retornam 404.
 
 - `POST .../attachments` recebe `multipart/form-data` com um único campo `file`.
-  O limite é de 10 MB (acima disso, 413) e de 20 anexos por tarefa (409).
+  O tamanho máximo depende do plano (10 MB no Gratuito, 25 MB nos pagos; acima
+  do plano, 403 `PLAN_LIMIT_REACHED`; acima de 25 MB, 413) e há no máximo 20
+  anexos por tarefa (409). A soma dos anexos respeita a cota do plano.
 - Tipos aceitos, pela extensão: `png`, `jpg`, `jpeg`, `gif`, `webp`, `pdf`,
   `txt`, `md`, `csv`, `zip`, `docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`,
   `doc`, `xls` e `ppt`. Outros tipos, inclusive HTML e SVG, retornam 415.
@@ -328,6 +333,44 @@ No Compose local, o serviço `object-storage` usa SeaweedFS
 comunitárias atualizadas. O código usa apenas a API S3, então em produção pode
 ser AWS S3, Cloudflare R2 ou outro serviço compatível. Revise backup,
 criptografia e política de retenção do bucket antes de publicar.
+
+### Planos e limites
+
+Cada organização tem um plano (`organizations.plan`), `FREE` por padrão. Os
+limites ficam em `src/plans/plan-limits.ts`:
+
+| Recurso | Gratuito (`FREE`) | Profissional (`PRO`) | Empresarial (`BUSINESS`) |
+| --- | --- | --- | --- |
+| Membros | 5 | 50 | 250 |
+| Projetos | 3 | Sem limite | Sem limite |
+| Tarefas | 2.000 | Sem limite | Sem limite |
+| Armazenamento de anexos | 1 GB | 20 GB | 200 GB |
+| Tamanho por arquivo | 10 MB | 25 MB | 25 MB |
+
+Além disso, cada usuário pode ser proprietário de até 3 organizações no plano
+Gratuito, para que os limites não sejam contornados criando organizações.
+
+- Ao atingir um limite, a criação retorna 403 com
+  `{ code: "PLAN_LIMIT_REACHED", limit, plan, message }`. `limit` é `members`,
+  `projects`, `tasks`, `storage`, `fileSize` ou `freeOrganizations`.
+- A verificação trava a linha da organização (`FOR NO KEY UPDATE`) na mesma
+  transação da criação: pedidos simultâneos não ultrapassam o limite. A trava
+  não bloqueia as chaves estrangeiras que apontam para a organização.
+- Anexos são verificados antes do envio ao storage e de novo, com a trava, antes
+  do registro; se a cota acabou nesse intervalo, o objeto enviado é removido.
+- Reduzir o plano não apaga dados. O que excede o novo limite permanece e
+  somente novas criações daquele recurso ficam bloqueadas.
+- `GET /plans` lista o catálogo. `GET /organizations/:id/plan` retorna plano,
+  limites e uso atual para qualquer membro (404 para não membros).
+- Não há cobrança integrada. A troca de plano é operacional:
+  `npm run plan:set --workspace api -- <slug> <FREE|PRO|BUSINESS>` usa a
+  `DATABASE_URL`, registra `planChangedAt` e mostra o uso atual.
+
+Os limites foram escolhidos para manter o custo previsível. O armazenamento de
+objetos é o principal custo variável, por isso todos os planos têm cota. No
+Gratuito, membros, projetos e tarefas limitam o uso, e o tamanho máximo por
+arquivo mantém o upload em memória sob controle. A integração com um provedor
+de pagamento e os preços dependem de decisão comercial.
 
 ### Projetos
 

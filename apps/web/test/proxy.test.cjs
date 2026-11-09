@@ -24,12 +24,15 @@ test('proxies organization API routes but not the Angular creation page', () => 
     '/notifications?limit=20',
     '/notifications/id/read',
     '/notifications/read-all',
+    '/organizations/invalid-id/plan',
+    '/plans',
   ]) assert.equal(proxied(path), true, path);
 
   for (const path of [
     '/organizations/new', '/organizations/new?source=home', '/organizations/new/',
     '/organizations/11111111-1111-4111-8111-111111111111/other',
     '/projects', '/projects/11111111-1111-4111-8111-111111111111', '/notificationsx',
+    '/plan', '/plansx',
   ]) {
     assert.equal(proxied(path), false, path);
   }

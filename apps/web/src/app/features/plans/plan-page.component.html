@@ -1,0 +1,67 @@
+<section class="page page--plan">
+  <p class="eyebrow">ORGANIZAÇÃO</p>
+  <h1>Plano e uso</h1>
+  @if (!organizations.active()) {
+    <p role="status">Carregando organizações…</p>
+  } @else if (status() === 'error') {
+    <p class="message" role="alert">Não foi possível carregar o plano da organização.</p>
+    <button type="button" class="tf-button tf-button--subtle" (click)="retry()">Tentar novamente</button>
+  } @else if (overview(); as current) {
+    <p class="description">
+      <strong>{{ organizations.active()?.name }}</strong> está no plano <strong>{{ current.name }}</strong>@if (current.planChangedAt) {, desde {{ current.planChangedAt | date: 'dd/MM/yyyy' }}}.
+    </p>
+
+    <section class="settings-section" aria-labelledby="usage-title">
+      <h2 id="usage-title">Uso atual</h2>
+      <ul class="usage">
+        @for (row of rows(); track row.label) {
+          <li>
+            <div class="usage-head">
+              <span>{{ row.label }}</span>
+              <span class="usage-value">{{ row.used }} de {{ row.limit }}</span>
+            </div>
+            @if (row.percent !== null) {
+              <div class="meter" role="meter" [attr.aria-label]="row.label" aria-valuemin="0" aria-valuemax="100"
+                [attr.aria-valuenow]="row.percent" [class.meter--warn]="row.percent >= 80" [class.meter--full]="row.percent >= 100">
+                <span [style.width.%]="row.percent"></span>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+      <p class="hint">Arquivos de até {{ formatBytes(current.limits.maxFileBytes) }} cada.</p>
+    </section>
+
+    <section class="settings-section" aria-labelledby="plans-title">
+      <h2 id="plans-title">Planos</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Recurso</th>
+              @for (plan of catalog(); track plan.id) {
+                <th scope="col" [class.current]="plan.id === current.plan">
+                  {{ plan.name }}@if (plan.id === current.plan) { <span class="badge">atual</span> }
+                </th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Membros</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ limit(plan.limits.members) }}</td> }</tr>
+            <tr><th scope="row">Projetos</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ limit(plan.limits.projects) }}</td> }</tr>
+            <tr><th scope="row">Tarefas</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ limit(plan.limits.tasks) }}</td> }</tr>
+            <tr><th scope="row">Armazenamento</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ formatBytes(plan.limits.storageBytes) }}</td> }</tr>
+            <tr><th scope="row">Tamanho por arquivo</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ formatBytes(plan.limits.maxFileBytes) }}</td> }</tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">
+        Todos os planos incluem o aplicativo mobile com uso offline. Ao reduzir o plano nada é apagado: o que excede
+        o novo limite continua disponível, mas novos itens desse tipo ficam bloqueados.
+      </p>
+      <p class="hint">A contratação online ainda não está disponível; a mudança de plano é feita pela equipe do TaskFlow.</p>
+    </section>
+  } @else {
+    <p role="status">Carregando plano…</p>
+  }
+</section>

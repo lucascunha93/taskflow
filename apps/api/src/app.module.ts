@@ -13,6 +13,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
 import { TasksModule } from './tasks/tasks.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
+import { PlansModule } from './plans/plans.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ProjectsModule } from './projects/projects.module.js';
     PrismaModule,
     StorageModule,
     AuthModule,
+    PlansModule,
     // Avaliado depois do ConfigModule carregar o .env. Sem o par de credenciais,
     // o Observe fica desabilitado: não grava nem envia telemetria.
     ObserveModule.forRoot(observeOptions(process.env)),

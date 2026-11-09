@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { PlansService } from '../plans/plans.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -18,7 +19,10 @@ const MANAGER_ROLES = ['OWNER', 'ADMIN'] as const;
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly plans: PlansService,
+  ) { }
 
   async create(userId: string, dto: CreateOrganizationDto) {
     const name = dto.name.trim();
@@ -35,6 +39,8 @@ export class OrganizationsService {
     const slug = `${baseSlug || 'organization'}-${crypto.randomUUID().slice(0, 8)}`;
 
     return this.prisma.$transaction(async (tx) => {
+      // Toda organização nasce no plano gratuito.
+      await this.plans.assertCanOwnFreeOrganization(tx, userId);
       const organization = await tx.organization.create({
         data: {
           name,
@@ -54,6 +60,7 @@ export class OrganizationsService {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
+        plan: organization.plan,
         role: 'OWNER' as const,
         createdAt: organization.createdAt,
       };
@@ -73,6 +80,7 @@ export class OrganizationsService {
         id: true,
         name: true,
         slug: true,
+        plan: true,
         createdAt: true,
         memberships: {
           where: {
@@ -129,7 +137,7 @@ export class OrganizationsService {
           },
         },
         data: { name: dto.name.trim() },
-        select: { id: true, name: true, slug: true, createdAt: true },
+        select: { id: true, name: true, slug: true, plan: true, createdAt: true },
       });
 
       return { ...organization, role: requesterMembership.role };
@@ -222,17 +230,20 @@ export class OrganizationsService {
 
     let membership;
     try {
-      membership = await this.prisma.membership.create({
-        data: {
-          organizationId,
-          userId: user.id,
-          role: dto.role,
-        },
-        select: {
-          id: true,
-          role: true,
-          createdAt: true,
-        },
+      membership = await this.prisma.$transaction(async (tx) => {
+        await this.plans.assertCanCreate(tx, organizationId, 'members');
+        return tx.membership.create({
+          data: {
+            organizationId,
+            userId: user.id,
+            role: dto.role,
+          },
+          select: {
+            id: true,
+            role: true,
+            createdAt: true,
+          },
+        });
       });
     } catch (error: unknown) {
       if (

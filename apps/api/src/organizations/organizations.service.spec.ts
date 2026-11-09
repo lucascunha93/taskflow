@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PlanLimitException } from '../plans/plan-limits.js';
+import { PlansService } from '../plans/plans.service.js';
 import { OrganizationMemberRole } from './dto/add-member.dto.js';
 import { OrganizationsService } from './organizations.service.js';
 
@@ -10,6 +12,7 @@ describe('OrganizationsService', () => {
   const user = { id: 'member', name: 'Member', email: 'member@example.test' };
   const membership = { id: 'membership', role: 'MEMBER', createdAt: new Date() };
   let service: OrganizationsService;
+  let plans: { assertCanCreate: ReturnType<typeof vi.fn>; assertCanOwnFreeOrganization: ReturnType<typeof vi.fn> };
   let transactionMembershipCreate: ReturnType<typeof vi.fn>;
   let prisma: {
     organization: {
@@ -43,9 +46,10 @@ describe('OrganizationsService', () => {
       $transaction: vi.fn((callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const module = await Test.createTestingModule({
-      providers: [OrganizationsService, { provide: PrismaService, useValue: prisma }],
+      providers: [OrganizationsService, { provide: PlansService, useValue: { assertCanCreate: vi.fn(), assertCanStore: vi.fn(), assertCanOwnFreeOrganization: vi.fn() } }, { provide: PrismaService, useValue: prisma }],
     }).compile();
     service = module.get(OrganizationsService);
+    plans = module.get(PlansService);
   });
 
   it('creates an owner membership and a slug no longer than 80 characters', async () => {
@@ -98,19 +102,19 @@ describe('OrganizationsService', () => {
       email: user.email,
       role: OrganizationMemberRole.ADMIN,
     })).rejects.toMatchObject({ status: 403 });
-    expect(prisma.membership.create).not.toHaveBeenCalled();
+    expect(transactionMembershipCreate).not.toHaveBeenCalled();
   });
 
   it('adds an existing user to the authorized organization', async () => {
     prisma.membership.findUnique.mockResolvedValueOnce({ role: 'OWNER' }).mockResolvedValueOnce(null);
     prisma.user.findUnique.mockResolvedValue(user);
-    prisma.membership.create.mockResolvedValue(membership);
+    transactionMembershipCreate.mockResolvedValue(membership);
     const result = await service.addMember(organizationId, requesterId, {
       email: ' MEMBER@example.test ',
       role: OrganizationMemberRole.MEMBER,
     });
     expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { email: user.email } }));
-    expect(prisma.membership.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(transactionMembershipCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: { organizationId, userId: user.id, role: 'MEMBER' },
     }));
     expect(result).toEqual({ user, membership });
@@ -119,7 +123,7 @@ describe('OrganizationsService', () => {
   it('reports a duplicate membership even when a concurrent insert wins', async () => {
     prisma.membership.findUnique.mockResolvedValueOnce({ role: 'OWNER' }).mockResolvedValueOnce(null);
     prisma.user.findUnique.mockResolvedValue(user);
-    prisma.membership.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', {
+    transactionMembershipCreate.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', {
       code: 'P2002',
       clientVersion: 'test',
     }));
@@ -127,6 +131,26 @@ describe('OrganizationsService', () => {
       email: user.email,
       role: OrganizationMemberRole.MEMBER,
     })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('checks plan limits inside the transactions that create organizations and members', async () => {
+    await service.create(requesterId, { name: 'Equipe' });
+    expect(plans.assertCanOwnFreeOrganization).toHaveBeenCalledWith(expect.anything(), requesterId);
+
+    plans.assertCanOwnFreeOrganization.mockRejectedValueOnce(new PlanLimitException('freeOrganizations', 'FREE', 'limite'));
+    transactionMembershipCreate.mockClear();
+    await expect(service.create(requesterId, { name: 'Outra' })).rejects.toMatchObject({ status: 403 });
+    expect(transactionMembershipCreate).not.toHaveBeenCalled();
+
+    prisma.membership.findUnique.mockResolvedValueOnce({ role: 'OWNER' }).mockResolvedValueOnce(null);
+    prisma.user.findUnique.mockResolvedValue(user);
+    plans.assertCanCreate.mockRejectedValueOnce(new PlanLimitException('members', 'FREE', 'limite'));
+    await expect(service.addMember(organizationId, requesterId, {
+      email: user.email,
+      role: OrganizationMemberRole.MEMBER,
+    })).rejects.toMatchObject({ status: 403, response: { code: 'PLAN_LIMIT_REACHED', limit: 'members' } });
+    expect(plans.assertCanCreate).toHaveBeenCalledWith(expect.anything(), organizationId, 'members');
+    expect(transactionMembershipCreate).not.toHaveBeenCalled();
   });
 
   it('only lists members of the requested organization after checking membership', async () => {
@@ -155,7 +179,7 @@ describe('OrganizationsService', () => {
           memberships: { some: { userId: requesterId, role: { in: ['OWNER', 'ADMIN'] } } },
         },
         data: { name: 'Novo nome' },
-        select: { id: true, name: true, slug: true, createdAt: true },
+        select: { id: true, name: true, slug: true, plan: true, createdAt: true },
       });
     });
 

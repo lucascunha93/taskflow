@@ -1,5 +1,6 @@
 import { DOCUMENT, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../../plans/plan.models';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -141,8 +142,10 @@ export class TaskAttachmentsComponent {
   }
 
   private message(error: unknown, fallback: string): string {
+    const planLimit = planLimitMessage(error);
+    if (planLimit) return planLimit;
     if (error instanceof HttpErrorResponse) {
-      if (error.status === 413) return 'O arquivo excede o limite de 10 MB.';
+      if (error.status === 413) return 'O arquivo excede o limite de 25 MB.';
       if (error.status === 415) return 'Tipo de arquivo não permitido ou conteúdo diferente da extensão.';
       if (error.status === 409) return 'Esta tarefa já tem o máximo de 20 anexos.';
       if (error.status === 503) return 'Os anexos estão indisponíveis: o armazenamento não está configurado.';

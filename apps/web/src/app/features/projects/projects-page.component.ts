@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../plans/plan.models';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -109,6 +110,8 @@ export class ProjectsPageComponent {
   }
 
   private message(error: unknown): string {
+    const planLimit = planLimitMessage(error);
+    if (planLimit) return planLimit;
     if (error instanceof HttpErrorResponse) {
       if (error.status === 409) return 'Já existe um projeto com esse nome nesta organização.';
       if (error.status === 403) return 'Somente proprietários e administradores podem gerenciar projetos.';

@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../plans/plan.models';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
@@ -216,7 +217,10 @@ export class TasksPageComponent {
       error: (error: unknown) => {
         if (this.activeId() !== organizationId) return;
         this.createBusy.set(false);
-        if (error instanceof HttpErrorResponse && error.status === 403) {
+        const planLimit = planLimitMessage(error);
+        if (planLimit) {
+          this.createError.set(planLimit);
+        } else if (error instanceof HttpErrorResponse && error.status === 403) {
           this.createError.set('Operação não permitida. Confira o responsável e suas permissões.');
         } else if (error instanceof HttpErrorResponse && error.status === 404) {
           this.createError.set('Organização não encontrada ou acesso indisponível.');

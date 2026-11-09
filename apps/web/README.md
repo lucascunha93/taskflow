@@ -136,6 +136,14 @@ arquivo inicia o download: a aplicação pede à API uma URL assinada de curta
 duração e o navegador baixa o arquivo, sem exibi-lo na página. Quem enviou,
 proprietários e administradores podem excluir, com confirmação.
 
+## Plano e uso
+
+"Plano e uso", no menu da organização, mostra o plano atual, o uso de membros,
+projetos, tarefas e armazenamento com a proporção em relação ao limite, e a
+comparação entre os planos. Quando a API recusa uma criação por limite do plano
+(403 `PLAN_LIMIT_REACHED`), as telas de organização, membros, projetos,
+tarefas e anexos exibem a mensagem do plano em vez da mensagem de permissão.
+
 ## Projetos e quadros
 
 Em `/projects`, a organização ativa lista seus projetos com a quantidade de

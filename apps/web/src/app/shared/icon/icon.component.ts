@@ -11,7 +11,8 @@ export type IconName =
   | 'menu'
   | 'close'
   | 'bell'
-  | 'projects';
+  | 'projects'
+  | 'plan';
 
 @Component({
   selector: 'app-icon',
@@ -60,6 +61,9 @@ export type IconName =
           <rect x="3.5" y="4" width="5" height="16" rx="1.5" />
           <rect x="9.5" y="4" width="5" height="11" rx="1.5" />
           <rect x="15.5" y="4" width="5" height="7" rx="1.5" />
+        }
+        @case ('plan') {
+          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
         }
         @case ('bell') {
           <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5Z" />

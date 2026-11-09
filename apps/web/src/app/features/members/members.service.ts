@@ -1,4 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../plans/plan.models';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Subscription, map } from 'rxjs';
 import { API_BASE_URL } from '../../core/api-base-url';
@@ -131,7 +132,10 @@ export class MembersService {
       error: (error: unknown) => {
         if (!this.isCurrent(organization.id, generation)) return;
         this.addingState.set(false);
-        if (error instanceof HttpErrorResponse && error.status === 403) {
+        const planLimit = planLimitMessage(error);
+        if (planLimit) {
+          this.addErrorState.set(planLimit);
+        } else if (error instanceof HttpErrorResponse && error.status === 403) {
           this.addErrorState.set('Você não tem permissão para adicionar este membro. Verifique sua função.');
         } else if (error instanceof HttpErrorResponse && error.status === 404) {
           this.addErrorState.set('Usuário não encontrado ou organização indisponível. Verifique o e-mail e o acesso à organização.');

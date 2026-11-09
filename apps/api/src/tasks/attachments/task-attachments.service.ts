@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { MembershipRole, Prisma } from '../../generated/prisma/client.js';
 import { ActivityService } from '../../activity/activity.service.js';
+import { PlansService } from '../../plans/plans.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { ATTACHMENTS_PER_TASK, attachmentContentType, sanitizeFileName } from './file-policy.js';
@@ -40,6 +41,7 @@ export class TaskAttachmentsService {
     private readonly prisma: PrismaService,
     private readonly storage: ObjectStorageService,
     private readonly activity: ActivityService,
+    private readonly plans: PlansService,
   ) {}
 
   async list(organizationId: string, taskId: string, userId: string) {
@@ -68,12 +70,16 @@ export class TaskAttachmentsService {
     if (count >= ATTACHMENTS_PER_TASK) {
       throw new ConflictException(`Uma tarefa pode ter no máximo ${ATTACHMENTS_PER_TASK} anexos.`);
     }
+    // Checagem prévia, para não enviar ao storage um arquivo que será recusado.
+    await this.plans.assertCanStore(organizationId, file.buffer.length);
 
     const id = randomUUID();
     const storageKey = `organizations/${organizationId}/tasks/${taskId}/${id}`;
     await this.storage.put(storageKey, file.buffer, contentType);
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // Confirma a cota com a organização travada: envios simultâneos não a ultrapassam.
+        await this.plans.assertCanStore(organizationId, file.buffer.length, tx);
         const attachment = await tx.taskAttachment.create({
           data: { id, organizationId, taskId, uploaderId: userId, fileName, contentType, size: file.buffer.length, storageKey },
           select: attachmentSelect,

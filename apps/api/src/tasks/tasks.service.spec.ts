@@ -1,5 +1,7 @@
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PlanLimitException } from '../plans/plan-limits.js';
+import { PlansService } from '../plans/plans.service.js';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js';
 import { TaskStatus } from './dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
@@ -10,6 +12,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 describe('TasksService', () => {
   const storage = { deleteQuietly: vi.fn().mockResolvedValue(undefined), isConfigured: () => false };
   let service: TasksService;
+  let moduleRef: TestingModule;
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     membership: { findUnique: ReturnType<typeof vi.fn> };
@@ -50,6 +53,7 @@ describe('TasksService', () => {
     const module = await Test.createTestingModule({
       providers: [
         TasksService,
+        { provide: PlansService, useValue: { assertCanCreate: vi.fn(), assertCanStore: vi.fn(), assertCanOwnFreeOrganization: vi.fn() } },
         { provide: PrismaService, useValue: prisma },
         { provide: ActivityService, useValue: activity },
         { provide: ObjectStorageService, useValue: storage },
@@ -57,6 +61,7 @@ describe('TasksService', () => {
       ],
     }).compile();
     service = module.get(TasksService);
+    moduleRef = module;
   });
 
   it('does not create tasks for a requester outside the organization', async () => {
@@ -88,6 +93,17 @@ describe('TasksService', () => {
         assigneeId: 'member', projectId: null, dueDate: new Date('2026-10-30'),
       },
     }));
+  });
+
+  it('checks the task limit of the plan before creating', async () => {
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    const plans = moduleRef.get(PlansService) as unknown as { assertCanCreate: ReturnType<typeof vi.fn> };
+    plans.assertCanCreate.mockRejectedValueOnce(new PlanLimitException('tasks', 'FREE', 'limite'));
+    await expect(service.create(organizationId, userId, { title: 'Nova tarefa' })).rejects.toMatchObject({
+      status: 403, response: { code: 'PLAN_LIMIT_REACHED', limit: 'tasks' },
+    });
+    expect(plans.assertCanCreate).toHaveBeenCalledWith(expect.anything(), organizationId, 'tasks');
+    expect(prisma.task.create).not.toHaveBeenCalled();
   });
 
   it('creates a task with the requested valid status', async () => {

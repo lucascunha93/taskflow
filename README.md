@@ -16,6 +16,8 @@ não está configurada.
   com validação de associação, controle de versão, filtros e paginação.
 - Comentários, anexos (armazenamento compatível com S3), histórico de
   alterações, notificações no app e projetos com quadro por status.
+- Planos Gratuito, Profissional e Empresarial com limites de membros, projetos,
+  tarefas e armazenamento, e tela de plano e uso.
 - Sessão com access token em memória e refresh token rotativo em cookie
   `HttpOnly`.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.

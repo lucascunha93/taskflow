@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { planLimitMessage } from '../plans/plan.models';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
@@ -39,9 +40,9 @@ export class CreateOrganizationComponent {
         void this.router.navigate(['/'], { info: { createdOrganizationId: organization.id } });
       },
       error: (error: unknown) => this.error.set(
-        error instanceof HttpErrorResponse && error.status === 409
+        planLimitMessage(error) ?? (error instanceof HttpErrorResponse && error.status === 409
           ? 'Houve um conflito ao criar a organização. Tente novamente.'
-          : 'Não foi possível criar a organização. Verifique a conexão e tente novamente.',
+          : 'Não foi possível criar a organização. Verifique a conexão e tente novamente.'),
       ),
     });
   }

@@ -18,6 +18,8 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TasksModule } from '../src/tasks/tasks.module.js';
 import { ProjectsModule } from '../src/projects/projects.module.js';
 import { StorageModule } from '../src/storage/storage.module.js';
+import { PlansModule } from '../src/plans/plans.module.js';
+import { FREE_ORGANIZATIONS_PER_OWNER, PLANS } from '../src/plans/plan-limits.js';
 
 type TestUser = { id: string; email: string; token: string };
 
@@ -110,7 +112,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3Secret },
     });
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, OrganizationsModule, TasksModule, ProjectsModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, PlansModule, OrganizationsModule, TasksModule, ProjectsModule],
     })
       // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
       .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
@@ -621,6 +623,77 @@ describe('HTTP integration with isolated PostgreSQL', () => {
         .send({ email: candidate.email, role: 'MEMBER' })));
     expect(results.map((result) => result.status).sort((a, b) => a - b)).toEqual([201, 409]);
     expect(await prisma.membership.count({ where: { organizationId: orgA, userId: candidate.id } })).toBe(1);
+  });
+
+  it('enforces plan limits atomically and reports usage', async () => {
+    const http = () => request(app.getHttpServer());
+    const planOwner = await register('plan-owner');
+    const org = await organization(planOwner, 'Plan limits');
+    const overview = await http().get(`/organizations/${org}/plan`).set('Authorization', auth(planOwner)).expect(200);
+    expect(overview.body).toMatchObject({
+      plan: 'FREE', limits: PLANS.FREE.limits, usage: { members: 1, projects: 0, tasks: 0, storageBytes: 0 },
+    });
+    await http().get(`/organizations/${org}/plan`).set('Authorization', auth(other)).expect(404);
+    const catalog = await http().get('/plans').set('Authorization', auth(planOwner)).expect(200);
+    expect(catalog.body.map((plan: { id: string }) => plan.id)).toEqual(['FREE', 'PRO', 'BUSINESS']);
+
+    // Membros: limite 5. Com 4 membros, de duas adições simultâneas só uma entra.
+    const invitees = await Promise.all([1, 2, 3, 4, 5].map((index) => register(`plan-member-${index}`)));
+    for (const invitee of invitees.slice(0, 3)) {
+      await http().post(`/organizations/${org}/members`).set('Authorization', auth(planOwner))
+        .send({ email: invitee.email, role: 'MEMBER' }).expect(201);
+    }
+    const memberResults = await Promise.all(invitees.slice(3).map((invitee) =>
+      http().post(`/organizations/${org}/members`).set('Authorization', auth(planOwner)).send({ email: invitee.email, role: 'MEMBER' })));
+    expect(memberResults.map((result) => result.status).sort((a, b) => a - b)).toEqual([201, 403]);
+    expect(memberResults.find((result) => result.status === 403)?.body).toMatchObject({ code: 'PLAN_LIMIT_REACHED', limit: 'members', plan: 'FREE' });
+    expect(await prisma.membership.count({ where: { organizationId: org } })).toBe(PLANS.FREE.limits.members);
+
+    // Projetos: limite 3, mesmo com cinco criações simultâneas.
+    const projectResults = await Promise.all([1, 2, 3, 4, 5].map((index) =>
+      http().post(`/organizations/${org}/projects`).set('Authorization', auth(planOwner)).send({ name: `Projeto ${index}` })));
+    expect(projectResults.filter((result) => result.status === 201)).toHaveLength(PLANS.FREE.limits.projects!);
+    expect(projectResults.filter((result) => result.status === 403)).toHaveLength(2);
+
+    // Tarefas: com uma vaga restante, três criações simultâneas resultam em uma.
+    await prisma.task.createMany({
+      data: Array.from({ length: PLANS.FREE.limits.tasks! - 1 }, (_, index) => ({
+        organizationId: org, creatorId: planOwner.id, title: `Carga ${index}`,
+      })),
+    });
+    const taskResults = await Promise.all([1, 2, 3].map((index) =>
+      http().post(path(org)).set('Authorization', auth(planOwner)).send({ title: `Concorrente ${index}` })));
+    expect(taskResults.map((result) => result.status).sort((a, b) => a - b)).toEqual([201, 403, 403]);
+    expect(await prisma.task.count({ where: { organizationId: org } })).toBe(PLANS.FREE.limits.tasks);
+
+    // Armazenamento: arquivo acima do limite do plano e cota esgotada.
+    const taskId = taskResults.find((result) => result.status === 201)?.body.id as string;
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+    const attachments = `${path(org)}/${taskId}/attachments`;
+    const big = Buffer.concat([png, Buffer.alloc(PLANS.FREE.limits.maxFileBytes)]);
+    const tooBig = await http().post(attachments).set('Authorization', auth(planOwner)).attach('file', big, 'grande.png').expect(403);
+    expect(tooBig.body).toMatchObject({ limit: 'fileSize' });
+    await prisma.taskAttachment.create({ data: {
+      organizationId: org, taskId, uploaderId: planOwner.id, fileName: 'cota.bin', contentType: 'application/zip',
+      size: PLANS.FREE.limits.storageBytes - 5, storageKey: `integration/${runId}/quota`,
+    } });
+    const full = await http().post(attachments).set('Authorization', auth(planOwner)).attach('file', png, 'foto.png').expect(403);
+    expect(full.body).toMatchObject({ limit: 'storage' });
+    expect(await prisma.taskAttachment.count({ where: { organizationId: org } })).toBe(1);
+    await prisma.taskAttachment.deleteMany({ where: { organizationId: org } });
+
+    // Organizações gratuitas por proprietário; uma organização paga não conta.
+    for (let index = 1; index < FREE_ORGANIZATIONS_PER_OWNER; index++) await organization(planOwner, `Plan extra ${index}`);
+    const refused = await http().post('/organizations').set('Authorization', auth(planOwner)).send({ name: `Plan refused ${runId}` }).expect(403);
+    expect(refused.body).toMatchObject({ code: 'PLAN_LIMIT_REACHED', limit: 'freeOrganizations' });
+
+    // Ao passar para o plano Profissional, os limites aumentam sem perder dados.
+    await prisma.organization.update({ where: { id: org }, data: { plan: 'PRO', planChangedAt: new Date() } });
+    await http().post(`/organizations/${org}/projects`).set('Authorization', auth(planOwner)).send({ name: 'Projeto pago' }).expect(201);
+    await http().post(path(org)).set('Authorization', auth(planOwner)).send({ title: 'Tarefa paga' }).expect(201);
+    await organization(planOwner, 'Plan after upgrade');
+    const upgraded = await http().get(`/organizations/${org}/plan`).set('Authorization', auth(planOwner)).expect(200);
+    expect(upgraded.body).toMatchObject({ plan: 'PRO', usage: { members: 5, projects: 4, tasks: PLANS.FREE.limits.tasks! + 1 } });
   });
 
   it('rolls back organization creation when OWNER membership violates a foreign key', async () => {

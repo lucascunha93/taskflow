@@ -20,7 +20,9 @@ describe('attachment helpers', () => {
     expect(localFileProblem({ name: 'a.PDF', size: 10 })).toBeNull();
     expect(localFileProblem({ name: 'a.svg', size: 10 })).toContain('não permitido');
     expect(localFileProblem({ name: 'a.png', size: 0 })).toContain('vazio');
-    expect(localFileProblem({ name: 'a.png', size: 10 * 1024 * 1024 + 1 })).toContain('10 MB');
+    expect(localFileProblem({ name: 'a.png', size: 10 * 1024 * 1024 + 1 })).toBeNull();
+    expect(localFileProblem({ name: 'a.png', size: 25 * 1024 * 1024 + 1 })).toContain('25 MB');
+    expect(formatBytes(1024 * 1024 * 1024)).toBe('1 GB');
     expect(formatBytes(512)).toBe('512 B');
     expect(formatBytes(1536)).toBe('1,5 KB');
   });

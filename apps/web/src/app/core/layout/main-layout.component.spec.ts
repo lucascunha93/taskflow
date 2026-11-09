@@ -42,7 +42,7 @@ describe('MainLayoutComponent', () => {
     expect(element.querySelector<HTMLAnchorElement>('.skip-link')?.getAttribute('href')).toBe('#main-content');
     expect(element.querySelectorAll('nav button')).toHaveLength(0);
     expect(Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a'), (link) => link.getAttribute('href')))
-      .toEqual(['/', '/tasks?assignee=me', '/tasks', '/projects', '/members', '/settings']);
+      .toEqual(['/', '/tasks?assignee=me', '/tasks', '/projects', '/members', '/settings', '/plan']);
   });
 
   it('marks only the matching task link as active', async () => {

@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PlanLimitException } from '../plans/plan-limits.js';
+import { PlansService } from '../plans/plans.service.js';
 import { ProjectsService } from './projects.service.js';
 
 describe('ProjectsService', () => {
@@ -17,7 +19,9 @@ describe('ProjectsService', () => {
       updateManyAndReturn: ReturnType<typeof vi.fn>;
       deleteMany: ReturnType<typeof vi.fn>;
     };
+    $transaction: ReturnType<typeof vi.fn>;
   };
+  let plans: { assertCanCreate: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     prisma = {
@@ -27,9 +31,11 @@ describe('ProjectsService', () => {
         create: vi.fn().mockResolvedValue(row), updateManyAndReturn: vi.fn().mockResolvedValue([{ id: 'p1' }]),
         deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      $transaction: vi.fn((callback: (tx: unknown) => Promise<unknown>) => callback(prisma)),
     };
+    plans = { assertCanCreate: vi.fn().mockResolvedValue(undefined) };
     const module = await Test.createTestingModule({
-      providers: [ProjectsService, { provide: PrismaService, useValue: prisma }],
+      providers: [ProjectsService, { provide: PlansService, useValue: plans }, { provide: PrismaService, useValue: prisma }],
     }).compile();
     service = module.get(ProjectsService);
   });
@@ -60,6 +66,17 @@ describe('ProjectsService', () => {
     }));
     prisma.project.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: 'test' }));
     await expect(service.create(organizationId, userId, { name: 'Site' })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('checks the project limit of the plan inside the creating transaction', async () => {
+    await service.create(organizationId, userId, { name: 'Site' });
+    expect(plans.assertCanCreate).toHaveBeenCalledWith(prisma, organizationId, 'projects');
+    plans.assertCanCreate.mockRejectedValueOnce(new PlanLimitException('projects', 'FREE', 'limite'));
+    prisma.project.create.mockClear();
+    await expect(service.create(organizationId, userId, { name: 'Outro' })).rejects.toMatchObject({
+      status: 403, response: { code: 'PLAN_LIMIT_REACHED', limit: 'projects' },
+    });
+    expect(prisma.project.create).not.toHaveBeenCalled();
   });
 
   it('updates and deletes only within the organization', async () => {

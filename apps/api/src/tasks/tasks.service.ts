@@ -17,6 +17,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { taskChanges } from '../activity/task-changes.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ObjectStorageService } from '../storage/object-storage.service.js';
+import { PlansService } from '../plans/plans.service.js';
 
 const taskDetailsSelect = {
   id: true,
@@ -58,6 +59,7 @@ export class TasksService {
     private readonly activity: ActivityService,
     private readonly notifications: NotificationsService,
     private readonly storage: ObjectStorageService,
+    private readonly plans: PlansService,
   ) {}
 
   async summary(organizationId: string, userId: string) {
@@ -205,6 +207,7 @@ export class TasksService {
     if (dto.projectId) await this.assertProjectInOrganization(organizationId, dto.projectId);
 
     return this.prisma.$transaction(async (tx) => {
+      await this.plans.assertCanCreate(tx, organizationId, 'tasks');
       const task = await tx.task.create({
         data: {
           title: dto.title.trim(),

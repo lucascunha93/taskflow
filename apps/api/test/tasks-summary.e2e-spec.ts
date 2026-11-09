@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PlansService } from '../src/plans/plans.service.js';
 import { TasksController } from '../src/tasks/tasks.controller.js';
 import { ObjectStorageService } from '../src/storage/object-storage.service.js';
 import { NotificationsService } from '../src/notifications/notifications.service.js';
@@ -65,6 +66,7 @@ describe('Task summary (HTTP with Prisma stub)', () => {
         { provide: ObjectStorageService, useValue: storage },
         { provide: NotificationsService, useValue: { notify: vi.fn().mockResolvedValue(undefined) } },
         { provide: ActivityService, useValue: { record: vi.fn() } },
+        { provide: PlansService, useValue: { assertCanCreate: vi.fn(), assertCanStore: vi.fn(), assertCanOwnFreeOrganization: vi.fn() } },
         { provide: PrismaService, useValue: {
           membership: { findUnique }, task: { groupBy, findMany },
           user: { findUnique: vi.fn().mockResolvedValue({ sessionVersion: 0 }) },

@@ -6,6 +6,8 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { ActivityService } from '../../activity/activity.service.js';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { PlanLimitException } from '../../plans/plan-limits.js';
+import { PlansService } from '../../plans/plans.service.js';
 import { contentDisposition, ObjectStorageService } from '../../storage/object-storage.service.js';
 import { ATTACHMENT_MAX_BYTES, attachmentContentType, sanitizeFileName } from './file-policy.js';
 import { TaskAttachmentsController } from './task-attachments.controller.js';
@@ -63,6 +65,7 @@ describe('TaskAttachmentsController (HTTP)', () => {
     downloadUrl: vi.fn().mockResolvedValue({ url: 'https://s3.example.test/signed', expiresAt: new Date('2030-01-01T00:00:00Z') }),
   };
   const activity = { record: vi.fn().mockResolvedValue(undefined) };
+  const plans = { assertCanStore: vi.fn().mockResolvedValue(undefined) };
   let prisma: {
     user: { findUnique: ReturnType<typeof vi.fn> };
     membership: { findUnique: ReturnType<typeof vi.fn> };
@@ -96,6 +99,7 @@ describe('TaskAttachmentsController (HTTP)', () => {
       controllers: [TaskAttachmentsController],
       providers: [
         TaskAttachmentsService, JwtAuthGuard,
+        { provide: PlansService, useValue: plans },
         { provide: PrismaService, useValue: prisma },
         { provide: ObjectStorageService, useValue: storage },
         { provide: ActivityService, useValue: activity },
@@ -125,6 +129,21 @@ describe('TaskAttachmentsController (HTTP)', () => {
     expect(activity.record).toHaveBeenCalledWith(prisma, expect.objectContaining({
       type: 'ATTACHMENT_ADDED', changes: [{ field: 'attachment', from: null, to: 'foto.png' }],
     }));
+  });
+
+  it('applies the plan quota before storing and again inside the transaction', async () => {
+    plans.assertCanStore.mockRejectedValueOnce(new PlanLimitException('fileSize', 'FREE', 'limite'));
+    const refused = await upload(PNG, 'foto.png').expect(403);
+    expect(refused.body).toMatchObject({ code: 'PLAN_LIMIT_REACHED', limit: 'fileSize', plan: 'FREE' });
+    expect(storage.put).not.toHaveBeenCalled();
+
+    // Outro envio esgotou a cota entre a checagem prévia e o registro.
+    plans.assertCanStore.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new PlanLimitException('storage', 'FREE', 'limite'));
+    await upload(PNG, 'foto.png').expect(403);
+    expect(plans.assertCanStore).toHaveBeenLastCalledWith(orgId, PNG.length, prisma);
+    const [key] = storage.put.mock.calls[0] as [string];
+    expect(storage.deleteQuietly).toHaveBeenCalledWith([key]);
+    expect(prisma.taskAttachment.create).not.toHaveBeenCalled();
   });
 
   it('rejects oversized, disallowed, mismatched and missing files before storing', async () => {

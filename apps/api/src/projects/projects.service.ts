@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
+import { PlansService } from '../plans/plans.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto.js';
 
@@ -25,7 +26,10 @@ const toResponse = ({ _count, ...project }: ProjectRow) => ({ ...project, taskCo
 /** Projetos de uma organização: membros consultam; OWNER e ADMIN gerenciam. */
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly plans: PlansService,
+  ) {}
 
   async list(organizationId: string, userId: string) {
     await this.role(organizationId, userId);
@@ -47,9 +51,12 @@ export class ProjectsService {
   async create(organizationId: string, userId: string, dto: CreateProjectDto) {
     await this.assertManager(organizationId, userId);
     try {
-      const project = await this.prisma.project.create({
-        data: { organizationId, name: dto.name.trim(), description: dto.description?.trim() || null },
-        select: projectSelect,
+      const project = await this.prisma.$transaction(async (tx) => {
+        await this.plans.assertCanCreate(tx, organizationId, 'projects');
+        return tx.project.create({
+          data: { organizationId, name: dto.name.trim(), description: dto.description?.trim() || null },
+          select: projectSelect,
+        });
       });
       return toResponse(project);
     } catch (error: unknown) {

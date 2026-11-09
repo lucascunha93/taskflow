@@ -7,6 +7,13 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Plano contratado pela organização; os limites ficam em src/plans/plan-limits.ts.
+enum OrganizationPlan {
+  FREE
+  PRO
+  BUSINESS
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
@@ -38,6 +45,9 @@ model Organization {
   id            String           @id @default(uuid()) @db.Uuid
   name          String           @db.VarChar(120)
   slug          String           @unique @db.VarChar(80)
+  plan          OrganizationPlan @default(FREE)
+  /// Última troca de plano; nulo enquanto permanece no plano inicial.
+  planChangedAt DateTime?        @db.Timestamptz(3)
   memberships   Membership[]
   tasks         Task[]
   comments      TaskComment[]
@@ -237,5 +247,7 @@ model TaskAttachment {
   uploader       User         @relation("AttachmentUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
 
   @@index([taskId, createdAt, id])
+  /// Soma do armazenamento usado pela organização (cota do plano).
+  @@index([organizationId, size])
   @@map("task_attachments")
 }
