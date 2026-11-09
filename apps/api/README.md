@@ -15,7 +15,7 @@ não existir. Preencha valores próprios:
 | `DATABASE_URL` | Conexão PostgreSQL usada pela API e pelos comandos Prisma. |
 | `JWT_SECRET` | Segredo de assinatura JWT, com pelo menos 32 caracteres. |
 | `PORT` | Porta HTTP; padrão `3000`. |
-| `CORS_ORIGINS` | Opcional. Origens exatas permitidas, separadas por vírgula (ex.: `https://app.example.com`). Sem valor, o CORS fica desabilitado. |
+| `CORS_ORIGINS` | Opcional. Origens exatas permitidas, separadas por vírgula (ex.: `https://app.example.com`). Para o app mobile, inclua `capacitor://localhost` (iOS) e `https://localhost` (Android). Sem valor, o CORS fica desabilitado. |
 | `TRUST_PROXY` | Opcional. Número de proxies reversos confiáveis (0 a 10), para que o rate limiting use o IP real do cliente. |
 | `REFRESH_TOKEN_TTL_DAYS` | Opcional. Validade do refresh token, de 1 a 90 dias; padrão `7`. Renovada a cada uso. |
 | `REFRESH_COOKIE_SECURE` | Opcional. `true` (padrão) ou `false`. Use `false` somente em desenvolvimento HTTP quando o navegador recusar cookies `Secure` em `localhost`. |
@@ -154,6 +154,7 @@ de produção.
 | POST | `/auth/login` | Não |
 | GET, PATCH | `/auth/me` | JWT |
 | POST | `/auth/refresh`, `/auth/logout` | Cookie de refresh + `X-TaskFlow-Request: 1` |
+| POST | `/auth/mobile/login`, `/auth/mobile/refresh`, `/auth/mobile/logout` | Não (refresh token no corpo) |
 | GET, POST | `/organizations/:organizationId/tasks/:taskId/attachments` | JWT |
 | GET | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId/download` | JWT |
 | DELETE | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId` | JWT |
@@ -202,6 +203,21 @@ contém o refresh token.
 - Tokens expirados de um usuário são removidos quando ele inicia uma nova
   sessão; os revogados são mantidos até expirar, para detectar reutilização.
 
+### Sessão do app mobile
+
+O WebView do Capacitor roda em outra origem (`capacitor://localhost` no iOS,
+`https://localhost` no Android), onde o cookie `SameSite=Strict` não é enviado.
+Por isso, o app usa endpoints próprios, com o refresh token no corpo:
+
+- `POST /auth/mobile/login` recebe `{ email, password }` e responde 200 com o
+  mesmo corpo do login web, mais `refreshToken` e `refreshExpiresAt`. O
+  limite por IP e o bloqueio da conta valem da mesma forma.
+- `POST /auth/mobile/refresh` recebe `{ refreshToken }` e devolve um novo par
+  (rotação). `POST /auth/mobile/logout` revoga a família do token (204).
+- As regras de rotação, reutilização, revogação por troca de senha e expiração
+  são as mesmas do cookie. Não há cookie nem credencial automática, portanto
+  não há CSRF. O app guarda o token no Keychain ou no Keystore.
+
 ### Sessões, senha e bloqueio de login
 
 O JWT carrega `ver`, a versão de sessão do usuário no momento da emissão. O
@@ -248,6 +264,12 @@ O `POST` aceita `title`, `description`, `assigneeId`, `dueDate` e `status`
 opcional (`TODO`, `IN_PROGRESS`, `DONE` ou `CANCELLED`). Sem `status`, a
 tarefa é criada como `TODO`. A resposta de criação contém os campos da tarefa,
 mas não inclui os objetos `creator` e `assignee`.
+O `POST` também aceita `id` (UUID) gerado pelo cliente, usado pelo app mobile
+offline. A criação fica idempotente: se a tarefa com esse `id` já foi criada
+pelo mesmo usuário na mesma organização, a resposta devolve a existente, sem
+duplicar a tarefa nem o histórico. Envios simultâneos com o mesmo `id` também
+resultam em uma só tarefa. O mesmo `id` usado por outro usuário ou em outra
+organização retorna 409.
 As consultas exigem associação à organização e retornam os campos da tarefa
 mais `creator` e `assignee` com `id` e `name`; `assignee` pode ser `null`.
 O detalhe retorna 404 para tarefa inexistente na organização, inclusive quando

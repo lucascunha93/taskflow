@@ -80,6 +80,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   return config;
 }
 
+const CAPACITOR_ORIGINS = ['capacitor://localhost', 'ionic://localhost'];
+
 /**
  * Converte `CORS_ORIGINS` (origens separadas por vírgula) em uma lista exata.
  * Sem valor, o CORS permanece desabilitado e a API atende apenas a mesma origem
@@ -88,6 +90,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
 export function parseCorsOrigins(value: string | undefined): string[] {
   if (!value?.trim()) return [];
   return value.split(',').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+    // Origens fixas do WebView do Capacitor no iOS (no Android é https://localhost).
+    if (CAPACITOR_ORIGINS.includes(entry)) return entry;
     let url: URL;
     try {
       url = new URL(entry);
@@ -95,7 +99,7 @@ export function parseCorsOrigins(value: string | undefined): string[] {
       throw new Error(`CORS_ORIGINS contém uma origem inválida: ${entry}`);
     }
     if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.origin !== entry) {
-      throw new Error(`CORS_ORIGINS deve conter apenas origens http(s) sem caminho ou barra final: ${entry}`);
+      throw new Error(`CORS_ORIGINS deve conter apenas origens http(s) sem caminho ou barra final, ou capacitor://localhost: ${entry}`);
     }
     return url.origin;
   });

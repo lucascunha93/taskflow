@@ -625,6 +625,32 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     expect(await prisma.membership.count({ where: { organizationId: orgA, userId: candidate.id } })).toBe(1);
   });
 
+  it('runs the mobile session with the refresh token in the body', async () => {
+    const http = () => request(app.getHttpServer());
+    const login = await http().post('/auth/mobile/login').send({ email: member.email, password }).expect(200);
+    expect(login.headers['set-cookie']).toBeUndefined();
+    const first = login.body.refreshToken as string;
+    const rotated = await http().post('/auth/mobile/refresh').send({ refreshToken: first }).expect(200);
+    expect(rotated.body.refreshToken).not.toBe(first);
+    await http().get('/auth/me').set('Authorization', `Bearer ${rotated.body.accessToken}`).expect(200);
+    await http().post('/auth/mobile/logout').send({ refreshToken: rotated.body.refreshToken }).expect(204);
+    await http().post('/auth/mobile/refresh').send({ refreshToken: rotated.body.refreshToken }).expect(401);
+  });
+
+  it('creates a task idempotently with a client-generated id', async () => {
+    const id = randomUUID();
+    const body = { id, title: 'Criada offline', status: 'TODO' };
+    const results = await Promise.all([1, 2].map(() =>
+      request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(member)).send(body)));
+    expect(results.map((result) => result.status)).toEqual([201, 201]);
+    expect(results.map((result) => result.body.id)).toEqual([id, id]);
+    expect(await prisma.task.count({ where: { id } })).toBe(1);
+    expect(await prisma.taskActivity.count({ where: { taskId: id, type: 'TASK_CREATED' } })).toBe(1);
+    await request(app.getHttpServer()).post(path(orgA)).set('Authorization', auth(owner)).send(body).expect(409);
+    await request(app.getHttpServer()).post(path(orgB)).set('Authorization', auth(other)).send(body).expect(409);
+    await prisma.task.delete({ where: { id } });
+  });
+
   it('enforces plan limits atomically and reports usage', async () => {
     const http = () => request(app.getHttpServer());
     const planOwner = await register('plan-owner');

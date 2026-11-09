@@ -37,6 +37,21 @@ const taskDetailsSelect = {
   project: { select: { id: true, name: true } },
 } satisfies Prisma.TaskSelect;
 
+const createdTaskSelect = {
+  id: true,
+  title: true,
+  description: true,
+  status: true,
+  version: true,
+  dueDate: true,
+  createdAt: true,
+  updatedAt: true,
+  creatorId: true,
+  assigneeId: true,
+  projectId: true,
+  organizationId: true,
+} satisfies Prisma.TaskSelect;
+
 const summaryTaskSelect = {
   id: true,
   organizationId: true,
@@ -186,6 +201,12 @@ export class TasksService {
   ) {
     await this.assertMembership(organizationId, userId);
 
+    // Reenvio de uma criação já concluída: devolve a mesma tarefa.
+    if (dto.id) {
+      const existing = await this.replayedCreate(organizationId, userId, dto.id);
+      if (existing) return existing;
+    }
+
     if (dto.assigneeId) {
       const assigneeMembership =
         await this.prisma.membership.findUnique({
@@ -210,6 +231,7 @@ export class TasksService {
       await this.plans.assertCanCreate(tx, organizationId, 'tasks');
       const task = await tx.task.create({
         data: {
+          ...(dto.id ? { id: dto.id } : {}),
           title: dto.title.trim(),
           ...(dto.status === undefined ? {} : { status: dto.status }),
           description: dto.description?.trim() || null,
@@ -219,20 +241,7 @@ export class TasksService {
           projectId: dto.projectId ?? null,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-          version: true,
-          dueDate: true,
-          createdAt: true,
-          updatedAt: true,
-          creatorId: true,
-          assigneeId: true,
-          projectId: true,
-          organizationId: true,
-        },
+        select: createdTaskSelect,
       });
 
       await this.activity.record(tx, {
@@ -243,7 +252,27 @@ export class TasksService {
         recipients: [task.assigneeId],
       });
       return task;
-    }).catch((error: unknown) => this.projectRace(error));
+    }).catch(async (error: unknown) => {
+      // Dois envios simultâneos com o mesmo identificador: o perdedor devolve a tarefa do vencedor.
+      if (dto.id && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const existing = await this.replayedCreate(organizationId, userId, dto.id);
+        if (existing) return existing;
+      }
+      return this.projectRace(error);
+    });
+  }
+
+  /**
+   * Tarefa já criada com o identificador informado pelo cliente. Só é devolvida
+   * ao mesmo criador na mesma organização; qualquer outro uso do identificador é 409.
+   */
+  private async replayedCreate(organizationId: string, userId: string, taskId: string) {
+    const existing = await this.prisma.task.findUnique({ where: { id: taskId }, select: createdTaskSelect });
+    if (!existing) return null;
+    if (existing.organizationId !== organizationId || existing.creatorId !== userId) {
+      throw new ConflictException('O identificador informado já está em uso.');
+    }
+    return existing;
   }
 
   async update(

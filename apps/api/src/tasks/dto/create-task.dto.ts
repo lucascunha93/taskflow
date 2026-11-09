@@ -12,6 +12,15 @@ import { Trim } from '../../common/validation/trim.decorator.js';
 import { TaskStatus } from './update-task.dto.js';
 
 export class CreateTaskDto {
+    /**
+     * Identificador gerado pelo cliente (UUID). Torna a criação idempotente:
+     * reenviar a mesma tarefa, como faz o app mobile ao sincronizar, devolve a
+     * tarefa já criada em vez de duplicá-la.
+     */
+    @IsOptional()
+    @IsUUID()
+    id?: string;
+
     @Trim()
     @IsString()
     @MinLength(3)

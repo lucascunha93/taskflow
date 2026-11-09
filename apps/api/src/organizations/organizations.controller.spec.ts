@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { AuthController } from '../auth/auth.controller.js';
+import { MobileAuthController } from '../auth/mobile-auth.controller.js';
 import { AuthService } from '../auth/auth.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { ConfigService } from '@nestjs/config';
@@ -65,7 +66,7 @@ describe('Authenticated HTTP endpoints', () => {
         JwtModule.register({ secret: 'test-only-signing-key-not-used-in-production' }),
         ThrottlerModule.forRoot([{ name: 'auth', ttl: 60_000, limit: 3 }]),
       ],
-      controllers: [AuthController, OrganizationsController, TasksController],
+      controllers: [AuthController, MobileAuthController, OrganizationsController, TasksController],
       providers: [
         AuthService, OrganizationsService, TasksService, JwtAuthGuard,
         RefreshCookieService, RefreshRequestGuard,
@@ -276,6 +277,42 @@ describe('Authenticated HTTP endpoints', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: userId }, data: { sessionVersion: { increment: 1 } },
     }));
+  });
+
+  describe('mobile session', () => {
+    it('returns the refresh token in the body without setting a cookie', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: userId, name: 'User', email: 'user@example.test', sessionVersion: 0, failedLoginAttempts: 0, lockedUntil: null,
+        passwordHash: await argon2.hash('valid-test-password', { type: argon2.argon2id }),
+      });
+      const response = await request(app.getHttpServer()).post('/auth/mobile/login')
+        .send({ email: 'user@example.test', password: 'valid-test-password' }).expect(200);
+      expect(response.body).toMatchObject({
+        accessToken: expect.any(String), tokenType: 'Bearer', refreshToken: 'issued-refresh',
+        refreshExpiresAt: refreshExpiry.toISOString(), user: { id: userId },
+      });
+      expect(response.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('rotates and revokes the token received in the body', async () => {
+      const valid = 'old-refresh-token-0123456789';
+      await request(app.getHttpServer()).post('/auth/mobile/refresh').send({}).expect(400);
+      await request(app.getHttpServer()).post('/auth/mobile/refresh').send({ refreshToken: 'short' }).expect(400);
+      refreshTokens.rotate.mockResolvedValueOnce({
+        user: { id: userId, name: 'User', email: 'user@example.test' }, sessionVersion: 0,
+        refreshToken: { token: 'rotated-refresh', expiresAt: refreshExpiry },
+      });
+      const rotated = await request(app.getHttpServer()).post('/auth/mobile/refresh').send({ refreshToken: valid }).expect(200);
+      expect(refreshTokens.rotate).toHaveBeenCalledWith(valid);
+      expect(rotated.body).toMatchObject({ refreshToken: 'rotated-refresh', user: { id: userId } });
+
+      const { UnauthorizedException } = await import('@nestjs/common');
+      refreshTokens.rotate.mockRejectedValueOnce(new UnauthorizedException());
+      await request(app.getHttpServer()).post('/auth/mobile/refresh').send({ refreshToken: valid }).expect(401);
+
+      await request(app.getHttpServer()).post('/auth/mobile/logout').send({ refreshToken: valid }).expect(204);
+      expect(refreshTokens.revokeFamilyOf).toHaveBeenCalledWith(valid);
+    });
   });
 
   describe('refresh cookie', () => {

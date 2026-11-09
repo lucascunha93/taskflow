@@ -44,6 +44,11 @@ describe('validateEnvironment', () => {
 });
 
 describe('parseCorsOrigins', () => {
+  it('accepts the fixed Capacitor WebView origins but no other custom scheme', () => {
+    expect(parseCorsOrigins('capacitor://localhost, https://localhost')).toEqual(['capacitor://localhost', 'https://localhost']);
+    expect(() => parseCorsOrigins('capacitor://evil.example')).toThrow(/CORS_ORIGINS/);
+  });
+
   it('returns no origins when unset so CORS stays disabled', () => {
     expect(parseCorsOrigins(undefined)).toEqual([]);
     expect(parseCorsOrigins('  ')).toEqual([]);

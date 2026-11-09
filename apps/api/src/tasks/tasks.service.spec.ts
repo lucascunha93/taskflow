@@ -1,4 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlanLimitException } from '../plans/plan-limits.js';
 import { PlansService } from '../plans/plans.service.js';
@@ -24,6 +25,7 @@ describe('TasksService', () => {
       findMany: ReturnType<typeof vi.fn>;
       count: ReturnType<typeof vi.fn>;
       findFirst: ReturnType<typeof vi.fn>;
+      findUnique: ReturnType<typeof vi.fn>;
       deleteMany: ReturnType<typeof vi.fn>;
       updateManyAndReturn: ReturnType<typeof vi.fn>;
     };
@@ -46,7 +48,7 @@ describe('TasksService', () => {
       $queryRaw: vi.fn().mockResolvedValue([]),
       taskAttachment: { findMany: vi.fn().mockResolvedValue([]) },
       task: {
-        create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(),
+        create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn().mockResolvedValue(null),
         deleteMany: vi.fn(), updateManyAndReturn: vi.fn(),
       },
     };
@@ -93,6 +95,32 @@ describe('TasksService', () => {
         assigneeId: 'member', projectId: null, dueDate: new Date('2026-10-30'),
       },
     }));
+  });
+
+  it('makes creation with a client id idempotent for the same creator only', async () => {
+    const id = '0f7a0bde-7a1b-4f43-9b6a-1d1d6a3f5a10';
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.create.mockResolvedValue({ id });
+    await service.create(organizationId, userId, { id, title: 'Offline' });
+    expect(prisma.task.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ id }) }));
+
+    const stored = { id, organizationId, creatorId: userId, title: 'Offline', version: 1 };
+    prisma.task.findUnique.mockResolvedValue(stored);
+    prisma.task.create.mockClear();
+    await expect(service.create(organizationId, userId, { id, title: 'Offline' })).resolves.toBe(stored);
+    expect(prisma.task.create).not.toHaveBeenCalled();
+
+    prisma.task.findUnique.mockResolvedValue({ ...stored, creatorId: 'someone-else' });
+    await expect(service.create(organizationId, userId, { id, title: 'Offline' })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('returns the winner of a concurrent create with the same client id', async () => {
+    const id = '0f7a0bde-7a1b-4f43-9b6a-1d1d6a3f5a11';
+    const stored = { id, organizationId, creatorId: userId, title: 'Offline', version: 1 };
+    prisma.membership.findUnique.mockResolvedValue({ id: 'membership' });
+    prisma.task.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(stored);
+    prisma.task.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: 'test' }));
+    await expect(service.create(organizationId, userId, { id, title: 'Offline' })).resolves.toBe(stored);
   });
 
   it('checks the task limit of the plan before creating', async () => {
