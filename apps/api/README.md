@@ -24,6 +24,7 @@ não existir. Preencha valores próprios:
 | `S3_ENDPOINT` | Endpoint usado pela API (ex.: `http://127.0.0.1:8333`); omitido, usa a AWS. |
 | `S3_PUBLIC_ENDPOINT` | Endereço acessível pelo navegador para as URLs assinadas de download; padrão: `S3_ENDPOINT`. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | Região (padrão `us-east-1`) e endereçamento por caminho (`true` para SeaweedFS/MinIO). |
+| `BILLING_PROVIDER` | Opcional. `fake` habilita o checkout simulado (sem cobrança). Recusado com `NODE_ENV=production`. Sem valor, a contratação online fica indisponível (503). |
 | `S3_CREATE_BUCKET` | `true` cria o bucket ausente ao iniciar; use somente em desenvolvimento. |
 | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | Par de configuração do NestJS Observe, quando utilizado. |
 
@@ -176,6 +177,10 @@ de produção.
 | POST | `/notifications/:notificationId/read`, `/notifications/read-all` | JWT |
 | GET | `/plans` | JWT |
 | GET | `/organizations/:organizationId/plan` | JWT |
+| GET | `/organizations/:organizationId/billing` | JWT |
+| POST | `/organizations/:organizationId/billing/checkouts`, `/organizations/:organizationId/billing/cancel` | JWT (OWNER) |
+| GET | `/organizations/:organizationId/billing/checkouts/:checkoutId` | JWT (OWNER) |
+| POST | `/billing/fake/checkouts/:checkoutId/complete` | JWT (OWNER), só com `BILLING_PROVIDER=fake` |
 
 ### Refresh token
 
@@ -384,9 +389,36 @@ Gratuito, para que os limites não sejam contornados criando organizações.
   somente novas criações daquele recurso ficam bloqueadas.
 - `GET /plans` lista o catálogo. `GET /organizations/:id/plan` retorna plano,
   limites e uso atual para qualquer membro (404 para não membros).
-- Não há cobrança integrada. A troca de plano é operacional:
-  `npm run plan:set --workspace api -- <slug> <FREE|PRO|BUSINESS>` usa a
-  `DATABASE_URL`, registra `planChangedAt` e mostra o uso atual.
+- A troca de plano pode ser feita pela contratação (abaixo) ou pelo script
+  operacional `npm run plan:set --workspace api -- <slug> <FREE|PRO|BUSINESS>`,
+  que usa a `DATABASE_URL`, registra `planChangedAt` e o histórico, e mostra o
+  uso atual.
+
+### Contratação de planos
+
+Somente o proprietário (OWNER) muda o plano. Administradores consultam o
+histórico. O provedor de pagamento fica isolado em `src/billing/billing-provider.ts`.
+Hoje só existe o provedor simulado (`BILLING_PROVIDER=fake`), que não cobra nada.
+
+1. `POST .../billing/checkouts` com `{ plan: "PRO" | "BUSINESS" }` cria um
+   checkout pendente, válido por 30 minutos, e devolve `checkoutUrl`. Um pedido
+   novo cancela o anterior ainda pendente. Pedir o plano atual retorna 409; sem
+   provedor configurado, 503.
+2. O usuário paga no provedor. No simulado, a "página de pagamento" é a tela
+   `/plan/checkout/:id` do web, e `POST /billing/fake/checkouts/:id/complete`
+   com `{ outcome: "approve" | "decline" }` faz o papel do retorno do gateway.
+3. O plano só muda quando o pagamento é aprovado. A conclusão é atômica e
+   idempotente: aprovações repetidas ou simultâneas registram uma única troca.
+   Aprovar um checkout recusado, cancelado ou vencido retorna 409.
+4. `POST .../billing/cancel` volta ao Gratuito na hora, sem reembolso
+   proporcional. É recusado (403 `freeOrganizations`) se o proprietário já tiver
+   3 organizações gratuitas.
+5. `GET .../billing` devolve `{ provider, canManage, history }`; o histórico
+   (`plan_changes`) é vazio para membros.
+
+Para usar um gateway real, implemente `BillingProvider` criando a sessão de
+pagamento no provedor e chame `BillingService.settle` a partir do webhook
+assinado dele.
 
 Os limites foram escolhidos para manter o custo previsível. O armazenamento de
 objetos é o principal custo variável, por isso todos os planos têm cota. No

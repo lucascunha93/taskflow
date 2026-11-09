@@ -791,7 +791,7 @@ Os indicadores devem ser calculados a partir de dados reais.
 - Notificações. (implementado: no app, sem e-mail ou tempo real)
 - Projetos e quadros. (implementado)
 - Anexos. (implementado: armazenamento compatível com S3)
-- Funcionalidades SaaS. (implementado: planos e limites; cobrança ainda não integrada)
+- Funcionalidades SaaS. (implementado: planos, limites e contratação com checkout simulado; gateway real ainda não integrado)
 - Aplicação mobile. (implementado: Ionic + Capacitor em apps/mobile)
 - Funcionamento offline e sincronização. (implementado: fila local, mesclagem por campo e resolução de conflitos)
 

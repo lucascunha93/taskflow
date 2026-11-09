@@ -14,6 +14,7 @@ import { TasksModule } from './tasks/tasks.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { PlansModule } from './plans/plans.module.js';
+import { BillingModule } from './billing/billing.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PlansModule } from './plans/plans.module.js';
     TasksModule,
     NotificationsModule,
     ProjectsModule,
+    BillingModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

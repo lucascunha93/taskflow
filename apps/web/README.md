@@ -144,6 +144,13 @@ comparação entre os planos. Quando a API recusa uma criação por limite do pl
 (403 `PLAN_LIMIT_REACHED`), as telas de organização, membros, projetos,
 tarefas e anexos exibem a mensagem do plano em vez da mensagem de permissão.
 
+Quando a API tem um provedor de pagamento, o proprietário vê "Mudar para …" em
+cada plano pago e "Voltar ao Gratuito" (com confirmação). Com
+`BILLING_PROVIDER=fake`, o pedido abre `/plan/checkout/:id`, uma tela de
+pagamento de demonstração com "Simular pagamento aprovado" e "Simular recusa".
+Nenhum valor é cobrado e nenhum dado de cartão é pedido. Após a aprovação, a
+tela de plano mostra o novo plano e o histórico de trocas.
+
 ## Projetos e quadros
 
 Em `/projects`, a organização ativa lista seus projetos com a quantidade de

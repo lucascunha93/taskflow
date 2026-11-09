@@ -10,6 +10,8 @@
     <p class="description">
       <strong>{{ organizations.active()?.name }}</strong> está no plano <strong>{{ current.name }}</strong>@if (current.planChangedAt) {, desde {{ current.planChangedAt | date: 'dd/MM/yyyy' }}}.
     </p>
+    @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+    @if (actionError()) { <p class="message" role="alert">{{ actionError() }}</p> }
 
     <section class="settings-section" aria-labelledby="usage-title">
       <h2 id="usage-title">Uso atual</h2>
@@ -52,6 +54,26 @@
             <tr><th scope="row">Tarefas</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ limit(plan.limits.tasks) }}</td> }</tr>
             <tr><th scope="row">Armazenamento</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ formatBytes(plan.limits.storageBytes) }}</td> }</tr>
             <tr><th scope="row">Tamanho por arquivo</th>@for (plan of catalog(); track plan.id) { <td [class.current]="plan.id === current.plan">{{ formatBytes(plan.limits.maxFileBytes) }}</td> }</tr>
+            @if (canPurchase()) {
+              <tr class="actions-row">
+                <th scope="row"><span class="visually-hidden">Ações</span></th>
+                @for (plan of catalog(); track plan.id) {
+                  <td [class.current]="plan.id === current.plan">
+                    @if (plan.id === current.plan) {
+                      <span class="hint">Plano atual</span>
+                    } @else if (plan.id === 'FREE') {
+                      <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirmingCancel.set(true)">
+                        Voltar ao Gratuito
+                      </button>
+                    } @else {
+                      <button type="button" class="tf-button" [disabled]="busy()" (click)="purchase(plan.id)">
+                        Mudar para {{ plan.name }}
+                      </button>
+                    }
+                  </td>
+                }
+              </tr>
+            }
           </tbody>
         </table>
       </div>
@@ -59,8 +81,41 @@
         Todos os planos incluem o aplicativo mobile com uso offline. Ao reduzir o plano nada é apagado: o que excede
         o novo limite continua disponível, mas novos itens desse tipo ficam bloqueados.
       </p>
-      <p class="hint">A contratação online ainda não está disponível; a mudança de plano é feita pela equipe do TaskFlow.</p>
+      @if (confirmingCancel()) {
+        <div class="confirm" role="alertdialog" aria-labelledby="cancel-title">
+          <p id="cancel-title"><strong>Voltar ao plano Gratuito agora?</strong> A mudança é imediata e não há reembolso
+            proporcional. Nada é apagado, mas o que exceder os limites do Gratuito fica bloqueado para novos itens.</p>
+          <div class="confirm-actions">
+            <button type="button" class="tf-button" [disabled]="busy()" (click)="cancel()">Confirmar</button>
+            <button type="button" class="tf-button tf-button--subtle" [disabled]="busy()" (click)="confirmingCancel.set(false)">Manter plano</button>
+          </div>
+        </div>
+      }
+      @if (canPurchase()) {
+        @if (simulated()) {
+          <p class="hint">Ambiente de demonstração: o pagamento é simulado e nenhum valor é cobrado.</p>
+        }
+      } @else if (billing().canManage) {
+        <p class="hint">A contratação online não está disponível neste ambiente; a mudança de plano é feita pela equipe do TaskFlow.</p>
+      } @else {
+        <p class="hint">Somente o proprietário da organização pode mudar o plano.</p>
+      }
     </section>
+
+    @if (billing().history.length > 0) {
+      <section class="settings-section" aria-labelledby="history-title">
+        <h2 id="history-title">Histórico de planos</h2>
+        <ul class="history">
+          @for (change of billing().history; track change.id) {
+            <li>
+              <span>{{ change.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+              <span>{{ planNames[change.fromPlan] }} → {{ planNames[change.toPlan] }}</span>
+              <span class="hint">{{ change.actor?.name ?? 'Equipe TaskFlow' }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
   } @else {
     <p role="status">Carregando plano…</p>
   }

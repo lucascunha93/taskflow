@@ -68,3 +68,27 @@ tbody th { color: var(--color-text-secondary); font-weight: 500; }
   font-size: var(--font-size-small);
   font-weight: 600;
 }
+
+.actions-row td { white-space: normal; }
+.actions-row .tf-button { min-height: 36px; padding-inline: var(--space-3); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.confirm {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+.confirm p { margin: 0 0 var(--space-3); }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.history { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.history li { display: flex; flex-wrap: wrap; gap: var(--space-4); font-variant-numeric: tabular-nums; }

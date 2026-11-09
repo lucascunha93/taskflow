@@ -42,12 +42,12 @@ enum TaskStatus {
 }
 
 model Organization {
-  id            String           @id @default(uuid()) @db.Uuid
-  name          String           @db.VarChar(120)
-  slug          String           @unique @db.VarChar(80)
-  plan          OrganizationPlan @default(FREE)
+  id            String            @id @default(uuid()) @db.Uuid
+  name          String            @db.VarChar(120)
+  slug          String            @unique @db.VarChar(80)
+  plan          OrganizationPlan  @default(FREE)
   /// Última troca de plano; nulo enquanto permanece no plano inicial.
-  planChangedAt DateTime?        @db.Timestamptz(3)
+  planChangedAt DateTime?         @db.Timestamptz(3)
   memberships   Membership[]
   tasks         Task[]
   comments      TaskComment[]
@@ -55,34 +55,38 @@ model Organization {
   notifications Notification[]
   projects      Project[]
   attachments   TaskAttachment[]
-  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+  checkouts     BillingCheckout[]
+  planChanges   PlanChange[]
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
 
   @@map("organizations")
 }
 
 model User {
-  id                  String           @id @default(uuid()) @db.Uuid
-  name                String           @db.VarChar(120)
-  email               String           @unique @db.VarChar(254)
-  passwordHash        String           @db.VarChar(255)
+  id                  String            @id @default(uuid()) @db.Uuid
+  name                String            @db.VarChar(120)
+  email               String            @unique @db.VarChar(254)
+  passwordHash        String            @db.VarChar(255)
   /// Incrementada para invalidar todos os JWTs já emitidos (troca de senha ou encerramento de sessões).
-  sessionVersion      Int              @default(0)
+  sessionVersion      Int               @default(0)
   /// Falhas de login consecutivas desde o último sucesso ou bloqueio.
-  failedLoginAttempts Int              @default(0)
+  failedLoginAttempts Int               @default(0)
   /// Enquanto no futuro, o login da conta é recusado sem verificar a senha.
-  lockedUntil         DateTime?        @db.Timestamptz(3)
+  lockedUntil         DateTime?         @db.Timestamptz(3)
   memberships         Membership[]
   refreshTokens       RefreshToken[]
-  comments            TaskComment[]    @relation("CommentAuthor")
-  activities          TaskActivity[]   @relation("ActivityActor")
-  notifications       Notification[]   @relation("NotificationRecipient")
-  notificationsSent   Notification[]   @relation("NotificationActor")
-  attachments         TaskAttachment[] @relation("AttachmentUploader")
-  createdTasks        Task[]           @relation("TaskCreator")
-  assignedTasks       Task[]           @relation("TaskAssignee")
-  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  comments            TaskComment[]     @relation("CommentAuthor")
+  activities          TaskActivity[]    @relation("ActivityActor")
+  notifications       Notification[]    @relation("NotificationRecipient")
+  notificationsSent   Notification[]    @relation("NotificationActor")
+  attachments         TaskAttachment[]  @relation("AttachmentUploader")
+  createdTasks        Task[]            @relation("TaskCreator")
+  assignedTasks       Task[]            @relation("TaskAssignee")
+  checkouts           BillingCheckout[] @relation("CheckoutRequester")
+  planChanges         PlanChange[]      @relation("PlanChangeActor")
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
 
   @@map("users")
 }
@@ -250,4 +254,52 @@ model TaskAttachment {
   /// Soma do armazenamento usado pela organização (cota do plano).
   @@index([organizationId, size])
   @@map("task_attachments")
+}
+
+enum CheckoutStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  EXPIRED
+}
+
+/// Pedido de contratação de um plano pago. O plano só muda quando o provedor
+/// de pagamento confirma (PAID); a confirmação é idempotente.
+model BillingCheckout {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  requestedById  String           @db.Uuid
+  plan           OrganizationPlan
+  status         CheckoutStatus   @default(PENDING)
+  /// Provedor que processou o pagamento (hoje apenas "fake").
+  provider       String           @db.VarChar(40)
+  expiresAt      DateTime         @db.Timestamptz(3)
+  completedAt    DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy    User             @relation("CheckoutRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  planChanges    PlanChange[]
+
+  @@index([organizationId, status])
+  @@map("billing_checkouts")
+}
+
+/// Histórico de trocas de plano da organização.
+model PlanChange {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  fromPlan       OrganizationPlan
+  toPlan         OrganizationPlan
+  /// Nulo quando a troca foi feita pelo script operacional.
+  actorId        String?          @db.Uuid
+  /// Checkout que originou a troca; nulo em cancelamentos e trocas operacionais.
+  checkoutId     String?          @db.Uuid
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?            @relation("PlanChangeActor", fields: [actorId], references: [id], onDelete: SetNull)
+  checkout       BillingCheckout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("plan_changes")
 }

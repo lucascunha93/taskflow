@@ -64,6 +64,15 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     }
   }
 
+  // Cobrança: só existe o provedor simulado, que nunca pode rodar em produção.
+  const billingProvider = text('BILLING_PROVIDER');
+  if (billingProvider !== undefined && billingProvider !== 'fake') {
+    errors.push('BILLING_PROVIDER aceita somente "fake" (checkout simulado).');
+  }
+  if (billingProvider === 'fake' && text('NODE_ENV') === 'production') {
+    errors.push('BILLING_PROVIDER=fake não pode ser usado com NODE_ENV=production.');
+  }
+
   if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
     errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
   }

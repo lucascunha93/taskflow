@@ -17,7 +17,8 @@ frontend Angular (`apps/web`) e o app mobile Ionic com Capacitor
 - Comentários, anexos (armazenamento compatível com S3), histórico de
   alterações, notificações no app e projetos com quadro por status.
 - Planos Gratuito, Profissional e Empresarial com limites de membros, projetos,
-  tarefas e armazenamento, e tela de plano e uso.
+  tarefas e armazenamento, tela de plano e uso e contratação com checkout
+  simulado (`BILLING_PROVIDER=fake`, sem cobrança real).
 - Sessão com access token em memória e refresh token rotativo em cookie
   `HttpOnly`.
 - PostgreSQL com Prisma e migrations versionadas; health check da API.

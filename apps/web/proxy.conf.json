@@ -11,11 +11,15 @@
     "target": "http://localhost:3000",
     "secure": false
   },
-  "^/organizations/[^/]+/(?:members|tasks|activity|projects|plan)(?:/[^?]*)?(?:\\?.*)?$": {
+  "^/organizations/[^/]+/(?:members|tasks|activity|projects|plan|billing)(?:/[^?]*)?(?:\\?.*)?$": {
     "target": "http://localhost:3000",
     "secure": false
   },
   "^/plans(?:\\?.*)?$": {
+    "target": "http://localhost:3000",
+    "secure": false
+  },
+  "^/billing/[^?]+(?:\\?.*)?$": {
     "target": "http://localhost:3000",
     "secure": false
   },

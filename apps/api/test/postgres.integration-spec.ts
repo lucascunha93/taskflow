@@ -19,6 +19,7 @@ import { TasksModule } from '../src/tasks/tasks.module.js';
 import { ProjectsModule } from '../src/projects/projects.module.js';
 import { StorageModule } from '../src/storage/storage.module.js';
 import { PlansModule } from '../src/plans/plans.module.js';
+import { BillingModule } from '../src/billing/billing.module.js';
 import { FREE_ORGANIZATIONS_PER_OWNER, PLANS } from '../src/plans/plan-limits.js';
 
 type TestUser = { id: string; email: string; token: string };
@@ -30,6 +31,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
   const organizationIds: string[] = [];
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousJwtSecret = process.env.JWT_SECRET;
+  const previousBilling = process.env.BILLING_PROVIDER;
   const s3Keys = ['S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID',
     'S3_SECRET_ACCESS_KEY', 'S3_FORCE_PATH_STYLE', 'S3_CREATE_BUCKET'] as const;
   const previousS3 = Object.fromEntries(s3Keys.map((key) => [key, process.env[key]]));
@@ -91,6 +93,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     }
     process.env.DATABASE_URL = raw;
     process.env.JWT_SECRET = `integration-only-${randomUUID()}-${randomUUID()}`;
+    process.env.BILLING_PROVIDER = 'fake';
 
     // Armazenamento S3 dedicado aos testes, com as mesmas salvaguardas do banco.
     const s3Url = process.env.TASKFLOW_INTEGRATION_S3_URL;
@@ -112,7 +115,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3Secret },
     });
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, PlansModule, OrganizationsModule, TasksModule, ProjectsModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, PlansModule, OrganizationsModule, TasksModule, ProjectsModule, BillingModule],
     })
       // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
       .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
@@ -156,6 +159,8 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       else process.env.DATABASE_URL = previousDatabaseUrl;
       if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
       else process.env.JWT_SECRET = previousJwtSecret;
+      if (previousBilling === undefined) delete process.env.BILLING_PROVIDER;
+      else process.env.BILLING_PROVIDER = previousBilling;
       for (const key of s3Keys) {
         if (previousS3[key] === undefined) delete process.env[key];
         else process.env[key] = previousS3[key];
@@ -720,6 +725,61 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     await organization(planOwner, 'Plan after upgrade');
     const upgraded = await http().get(`/organizations/${org}/plan`).set('Authorization', auth(planOwner)).expect(200);
     expect(upgraded.body).toMatchObject({ plan: 'PRO', usage: { members: 5, projects: 4, tasks: PLANS.FREE.limits.tasks! + 1 } });
+  });
+
+  it('changes plans only after the simulated payment is confirmed', async () => {
+    const http = () => request(app.getHttpServer());
+    const billingOwner = await register('billing-owner');
+    const billingMember = await register('billing-member');
+    const org = await organization(billingOwner, 'Billing');
+    await http().post(`/organizations/${org}/members`).set('Authorization', auth(billingOwner))
+      .send({ email: billingMember.email, role: 'MEMBER' }).expect(201);
+    const base = `/organizations/${org}/billing`;
+    const plan = async () => (await prisma.organization.findUniqueOrThrow({ where: { id: org } })).plan;
+    const complete = (id: string, outcome: string, user = billingOwner) =>
+      http().post(`/billing/fake/checkouts/${id}/complete`).set('Authorization', auth(user)).send({ outcome });
+
+    await http().post(`${base}/checkouts`).set('Authorization', auth(billingMember)).send({ plan: 'PRO' }).expect(403);
+    await http().post(`${base}/checkouts`).set('Authorization', auth(other)).send({ plan: 'PRO' }).expect(404);
+    await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'FREE' }).expect(400);
+
+    // Pagamento recusado: nada muda e o checkout não pode mais ser aprovado.
+    const declined = await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'PRO' }).expect(201);
+    expect(declined.body).toMatchObject({ status: 'PENDING', planName: 'Profissional', checkoutUrl: `/plan/checkout/${declined.body.id}` });
+    await complete(declined.body.id, 'approve', billingMember).expect(403);
+    expect((await complete(declined.body.id, 'decline').expect(200)).body.status).toBe('FAILED');
+    await complete(declined.body.id, 'approve').expect(409);
+    expect(await plan()).toBe('FREE');
+
+    // Um pedido novo cancela o anterior pendente.
+    const abandoned = await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'BUSINESS' }).expect(201);
+    const paid = await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'PRO' }).expect(201);
+    expect((await http().get(`${base}/checkouts/${abandoned.body.id}`).set('Authorization', auth(billingOwner)).expect(200)).body.status).toBe('CANCELED');
+
+    // Aprovações simultâneas: uma única troca de plano registrada.
+    const approvals = await Promise.all([1, 2].map(() => complete(paid.body.id, 'approve')));
+    expect(approvals.map((result) => result.status)).toEqual([200, 200]);
+    expect(approvals.map((result) => result.body.status)).toEqual(['PAID', 'PAID']);
+    expect(await plan()).toBe('PRO');
+    expect(await prisma.planChange.count({ where: { organizationId: org } })).toBe(1);
+
+    await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'PRO' }).expect(409);
+
+    // Checkout expirado.
+    const late = await http().post(`${base}/checkouts`).set('Authorization', auth(billingOwner)).send({ plan: 'BUSINESS' }).expect(201);
+    await prisma.billingCheckout.update({ where: { id: late.body.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await complete(late.body.id, 'approve').expect(409);
+    expect((await http().get(`${base}/checkouts/${late.body.id}`).set('Authorization', auth(billingOwner)).expect(200)).body.status).toBe('EXPIRED');
+    expect(await plan()).toBe('PRO');
+
+    // Volta ao Gratuito, com histórico visível ao proprietário e oculto ao membro.
+    await http().post(`${base}/cancel`).set('Authorization', auth(billingMember)).expect(403);
+    expect((await http().post(`${base}/cancel`).set('Authorization', auth(billingOwner)).expect(200)).body.plan).toBe('FREE');
+    await http().post(`${base}/cancel`).set('Authorization', auth(billingOwner)).expect(409);
+    const overview = await http().get(base).set('Authorization', auth(billingOwner)).expect(200);
+    expect(overview.body).toMatchObject({ provider: 'fake', canManage: true });
+    expect(overview.body.history.map((item: { fromPlan: string; toPlan: string }) => `${item.fromPlan}>${item.toPlan}`)).toEqual(['PRO>FREE', 'FREE>PRO']);
+    expect((await http().get(base).set('Authorization', auth(billingMember)).expect(200)).body.history).toEqual([]);
   });
 
   it('rolls back organization creation when OWNER membership violates a foreign key', async () => {

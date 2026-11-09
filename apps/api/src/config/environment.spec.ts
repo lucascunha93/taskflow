@@ -44,6 +44,12 @@ describe('validateEnvironment', () => {
 });
 
 describe('parseCorsOrigins', () => {
+  it('accepts only the simulated billing provider, and never in production', () => {
+    expect(() => validateEnvironment({ JWT_SECRET: 'test-only-secret-at-least-32-characters', BILLING_PROVIDER: 'fake' })).not.toThrow();
+    expect(() => validateEnvironment({ JWT_SECRET: 'test-only-secret-at-least-32-characters', BILLING_PROVIDER: 'stripe' })).toThrow(/BILLING_PROVIDER/);
+    expect(() => validateEnvironment({ JWT_SECRET: 'test-only-secret-at-least-32-characters', BILLING_PROVIDER: 'fake', NODE_ENV: 'production' })).toThrow(/NODE_ENV=production/);
+  });
+
   it('accepts the fixed Capacitor WebView origins but no other custom scheme', () => {
     expect(parseCorsOrigins('capacitor://localhost, https://localhost')).toEqual(['capacitor://localhost', 'https://localhost']);
     expect(() => parseCorsOrigins('capacitor://evil.example')).toThrow(/CORS_ORIGINS/);
