@@ -1,0 +1,76 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tarefas" text="" />
+    </ion-buttons>
+    <ion-title>{{ isNew() ? 'Nova tarefa' : 'Tarefa' }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if (!isNew() && !task()) {
+    <p class="empty-state">Tarefa não encontrada neste aparelho. Ela pode ter sido excluída.</p>
+  } @else {
+    @if (locked()) {
+      <ion-text color="warning" class="notice" role="status">
+        Esta tarefa tem uma alteração que precisa da sua decisão.
+        <a routerLink="/sincronizacao">Resolver agora</a>
+      </ion-text>
+    } @else if (task()?.sync === 'pending') {
+      <ion-note class="notice">Alterações salvas no aparelho, aguardando envio.</ion-note>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <ion-list lines="full">
+        <ion-item>
+          <ion-input label="Título" labelPlacement="stacked" formControlName="title" [counter]="true" maxlength="180"
+            errorText="Informe de 3 a 180 caracteres." />
+        </ion-item>
+        <ion-item>
+          <ion-textarea label="Descrição" labelPlacement="stacked" formControlName="description" [autoGrow]="true"
+            maxlength="5000" />
+        </ion-item>
+        <ion-item>
+          <ion-select label="Status" labelPlacement="stacked" formControlName="status" interface="action-sheet">
+            @for (status of statuses; track status.value) {
+              <ion-select-option [value]="status.value">{{ status.label }}</ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-select label="Responsável" labelPlacement="stacked" formControlName="assigneeId" interface="action-sheet">
+            <ion-select-option [value]="none">Sem responsável</ion-select-option>
+            @for (member of sync.members(); track member.id) {
+              <ion-select-option [value]="member.id">{{ member.name }}</ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-select label="Projeto" labelPlacement="stacked" formControlName="projectId" interface="action-sheet">
+            <ion-select-option [value]="none">Sem projeto</ion-select-option>
+            @for (project of sync.projects(); track project.id) {
+              <ion-select-option [value]="project.id">{{ project.name }}</ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-input label="Prazo" labelPlacement="stacked" type="date" formControlName="dueDate" />
+        </ion-item>
+      </ion-list>
+
+      @if (error()) {
+        <ion-text color="danger" class="notice" role="alert">{{ error() }}</ion-text>
+      }
+
+      <div class="actions">
+        <ion-button expand="block" type="submit" [disabled]="busy() || locked()">Salvar</ion-button>
+        @if (task()) {
+          <ion-button expand="block" fill="outline" color="danger" type="button" [disabled]="busy() || locked()"
+            (click)="confirmDelete()">
+            <ion-icon slot="start" name="trash-outline" /> Excluir
+          </ion-button>
+        }
+      </div>
+    </form>
+  }
+</ion-content>

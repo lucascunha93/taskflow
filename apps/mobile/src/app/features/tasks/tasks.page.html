@@ -1,0 +1,71 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-button routerLink="/organizacoes" aria-label="Trocar de organização">
+        <ion-icon slot="icon-only" name="business-outline" />
+      </ion-button>
+    </ion-buttons>
+    <ion-title>{{ sync.activeOrganization()?.name ?? 'Tarefas' }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="logout.confirm()" aria-label="Sair"><ion-icon slot="icon-only" name="log-out-outline" /></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="filter()" (ionChange)="setFilter($event.detail.value)" scrollable>
+      <ion-segment-button value="ALL">Todas</ion-segment-button>
+      <ion-segment-button value="TODO">A fazer</ion-segment-button>
+      <ion-segment-button value="IN_PROGRESS">Em andamento</ion-segment-button>
+      <ion-segment-button value="DONE">Concluídas</ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="refresh($event)">
+    <ion-refresher-content pullingText="Puxe para sincronizar" refreshingText="Sincronizando…" />
+  </ion-refresher>
+
+  <div class="sync-bar" role="status">
+    <ion-icon [name]="summary().icon" aria-hidden="true" />
+    <span>{{ summary().text }}</span>
+  </div>
+
+  @if (sync.issues().length > 0) {
+    <ion-button class="issues" color="warning" expand="block" fill="outline" routerLink="/sincronizacao">
+      <ion-icon slot="start" name="alert-circle-outline" />
+      {{ sync.issues().length }} alteração(ões) precisam da sua decisão
+    </ion-button>
+  }
+
+  <ion-searchbar placeholder="Buscar pelo título" [debounce]="200" (ionInput)="search.set($event.detail.value ?? '')" />
+
+  @if (visible().length === 0) {
+    <p class="empty-state">
+      @if (sync.tasks().length === 0) { Nenhuma tarefa neste aparelho ainda. } @else { Nenhuma tarefa encontrada. }
+    </p>
+  } @else {
+    <ion-list>
+      @for (task of visible(); track task.id) {
+        <ion-item button detail [routerLink]="['/tarefas', task.id]">
+          <ion-label>
+            <h2>{{ task.title }}</h2>
+            <ion-note class="meta">
+              {{ statusLabel(task.status) }}
+              @if (task.dueDate) { · prazo {{ task.dueDate | date: 'dd/MM/yyyy' : 'UTC' }} }
+              @if (assignee(task); as name) { · {{ name }} }
+            </ion-note>
+          </ion-label>
+          @if (task.sync !== 'synced') {
+            <ion-badge slot="end" [color]="badges[task.sync].color">{{ badges[task.sync].label }}</ion-badge>
+          }
+        </ion-item>
+      }
+    </ion-list>
+  }
+
+  <ion-fab slot="fixed" vertical="bottom" horizontal="end">
+    <ion-fab-button routerLink="/tarefas/nova" aria-label="Nova tarefa" [disabled]="!sync.activeOrganization()">
+      <ion-icon name="add" />
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

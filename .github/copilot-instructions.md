@@ -72,7 +72,7 @@ taskflow/
 │   │   ├── public/
 │   │   └── package.json
 │   │
-│   └── mobile/              # Futuro
+│   └── mobile/              # Ionic + Capacitor, offline
 │
 ├── packages/
 │   ├── shared-types/        # Futuro, se necessário
@@ -792,8 +792,8 @@ Os indicadores devem ser calculados a partir de dados reais.
 - Projetos e quadros. (implementado)
 - Anexos. (implementado: armazenamento compatível com S3)
 - Funcionalidades SaaS. (implementado: planos e limites; cobrança ainda não integrada)
-- Aplicação mobile.
-- Funcionamento offline e sincronização.
+- Aplicação mobile. (implementado: Ionic + Capacitor em apps/mobile)
+- Funcionamento offline e sincronização. (implementado: fila local, mesclagem por campo e resolução de conflitos)
 
 ---
 

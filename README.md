@@ -1,9 +1,9 @@
 # TaskFlow
 
 TaskFlow é uma plataforma SaaS B2B de gestão de tarefas para organizações. O
-repositório usa npm workspaces e está em desenvolvimento inicial: a API NestJS
-e a fundação do frontend Angular estão configuradas; a aplicação mobile ainda
-não está configurada.
+repositório usa npm workspaces com três aplicações: a API NestJS (`apps/api`), o
+frontend Angular (`apps/web`) e o app mobile Ionic com Capacitor
+(`apps/mobile`), que funciona offline.
 
 ## Estado atual
 
@@ -27,9 +27,12 @@ não está configurada.
   organização, perfil, membros, gestão de tarefas ("Minhas tarefas" e busca no
   cabeçalho) e dashboard com indicadores reais da organização ativa.
 
-As atualizações e exclusões usam concorrência otimista por `version`. O funcionamento
-offline e a sincronização mobile são planos futuros, não funcionalidades
-disponíveis.
+- App mobile (Ionic + Capacitor) com tarefas offline: alterações ficam numa fila
+  no aparelho e são sincronizadas com mesclagem automática por campo e
+  resolução de conflitos pelo usuário. As regras estão em
+  `apps/mobile/README.md`.
+
+As atualizações e exclusões usam concorrência otimista por `version`.
 
 ## Requisitos
 
@@ -63,6 +66,9 @@ existentes:
 6. Inicie com `npm run start:dev --workspace api`. O padrão é a porta 3000.
 7. Para o frontend, execute `npm run start --workspace web` e acesse
    `http://localhost:4200`.
+8. Para o app mobile no navegador, execute `npm run start --workspace mobile` e
+   acesse `http://localhost:8100`. O build nativo está descrito em
+   `apps/mobile/README.md`.
 
 Não execute migrações em um banco existente sem verificar o impacto. A
 segunda migration adiciona `passwordHash` obrigatório e falha se houver
@@ -81,6 +87,9 @@ npm run build --workspace web
 npm run lint --workspace web
 npm run test --workspace web
 npm run test:proxy --workspace web
+npm run build --workspace mobile
+npm run lint --workspace mobile
+npm run test --workspace mobile
 node .\node_modules\typescript\bin\tsc --noEmit --incremental false --project apps\api\tsconfig.json
 node .\node_modules\typescript\bin\tsc --noEmit --project apps\web\tsconfig.app.json
 node .\node_modules\typescript\bin\tsc --noEmit --project apps\web\tsconfig.spec.json

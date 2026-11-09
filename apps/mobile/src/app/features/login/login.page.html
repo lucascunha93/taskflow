@@ -1,0 +1,33 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>TaskFlow</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="intro">
+    <h1>Entrar</h1>
+    <ion-note>Use a mesma conta do TaskFlow na web. Depois do primeiro acesso, o app funciona sem conexão.</ion-note>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <ion-list lines="full">
+      <ion-item>
+        <ion-input label="E-mail" labelPlacement="stacked" type="email" formControlName="email" autocomplete="email"
+          inputmode="email" errorText="Informe um e-mail válido." />
+      </ion-item>
+      <ion-item>
+        <ion-input label="Senha" labelPlacement="stacked" type="password" formControlName="password"
+          autocomplete="current-password" errorText="Informe a senha." />
+      </ion-item>
+    </ion-list>
+
+    @if (error()) {
+      <ion-text color="danger" class="error" role="alert">{{ error() }}</ion-text>
+    }
+
+    <ion-button expand="block" type="submit" [disabled]="busy()">
+      @if (busy()) { <ion-spinner name="crescent" /> } @else { Entrar }
+    </ion-button>
+  </form>
+</ion-content>

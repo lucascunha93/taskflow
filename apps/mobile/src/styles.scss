@@ -1,0 +1,26 @@
+/* Estilos base do Ionic. */
+@use '@ionic/angular/css/core.css';
+@use '@ionic/angular/css/normalize.css';
+@use '@ionic/angular/css/structure.css';
+@use '@ionic/angular/css/typography.css';
+@use '@ionic/angular/css/padding.css';
+@use '@ionic/angular/css/flex-utils.css';
+@use '@ionic/angular/css/display.css';
+
+/* Cores da marca TaskFlow, as mesmas do web. */
+:root {
+  --ion-font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --ion-background-color: #f7f8fa;
+  --ion-color-primary: #325fbd;
+  --ion-color-primary-rgb: 50, 95, 189;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #274c99;
+  --ion-color-primary-tint: #476fc4;
+}
+
+.empty-state {
+  padding: 32px 16px;
+  color: var(--ion-color-medium);
+  text-align: center;
+}
