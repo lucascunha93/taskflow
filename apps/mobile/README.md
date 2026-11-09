@@ -121,6 +121,30 @@ npm run lint --workspace mobile
 npm run build --workspace mobile
 ```
 
+## Testar no Android com a API local
+
+Requer o Android Studio com o SDK e um emulador instalados (no primeiro uso, o
+assistente do Android Studio baixa o SDK) e o JDK 21.
+
+1. Em `apps/api/.env`, mantenha `CORS_ORIGINS=https://localhost` (origem do
+   WebView do Android) e inicie a API: `npm run start:dev --workspace api`.
+2. Execute `npm run android:local --workspace mobile`. O script gera o build
+   `native-local`, sincroniza o projeto `android/` liberando HTTP somente para
+   este teste e abre o Android Studio.
+3. No Android Studio, escolha o emulador e clique em Run.
+
+O build local usa `http://10.0.2.2:3000`, o endereço do computador visto pelo
+emulador. Para um celular físico na mesma rede Wi-Fi, troque o endereço em
+`src/environments/environment.local.ts` pelo IP do computador, libere a porta
+3000 no firewall do Windows e rode o script de novo.
+
+A liberação de HTTP fica num manifesto gerado e ignorado pelo git. Um `npx cap
+sync` normal volta a exigir HTTPS.
+
+Para testar o modo offline no emulador, use o modo avião ou desligue a rede em
+"Extended controls → Cellular/Wi-Fi". Faça alterações, veja o contador da fila e
+reative a rede para sincronizar.
+
 ## Build nativo (Android e iOS)
 
 1. Defina a URL pública da API, em HTTPS, em
@@ -132,10 +156,10 @@ npm run build --workspace mobile
 ```powershell
 npm run build:native --workspace mobile
 cd apps/mobile
-npx cap add android   # ou: npx cap add ios
-npx cap sync
+npx cap sync android   # para iOS: npx cap add ios && npx cap sync ios
 npx cap open android
 ```
 
-Os projetos nativos gerados (`android/`, `ios/`) devem ser versionados. O
+O projeto `android/` já está no repositório. Um projeto `ios/` gerado também
+deve ser versionado. O
 identificador do app é `app.taskflow.mobile`, em `capacitor.config.ts`.

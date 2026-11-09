@@ -108,6 +108,17 @@
                   "with": "src/environments/environment.native.ts"
                 }
               ]
+            },
+            "native-local": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.local.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
