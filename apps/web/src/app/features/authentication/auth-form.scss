@@ -57,3 +57,6 @@ label { font-weight: 600; }
 
 a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+.forgot { justify-self: end; font-size: var(--font-size-small); color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.forgot:hover { text-decoration: underline; }

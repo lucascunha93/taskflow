@@ -64,29 +64,30 @@ model Organization {
 }
 
 model User {
-  id                  String            @id @default(uuid()) @db.Uuid
-  name                String            @db.VarChar(120)
-  email               String            @unique @db.VarChar(254)
-  passwordHash        String            @db.VarChar(255)
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String               @db.VarChar(120)
+  email               String               @unique @db.VarChar(254)
+  passwordHash        String               @db.VarChar(255)
   /// Incrementada para invalidar todos os JWTs já emitidos (troca de senha ou encerramento de sessões).
-  sessionVersion      Int               @default(0)
+  sessionVersion      Int                  @default(0)
   /// Falhas de login consecutivas desde o último sucesso ou bloqueio.
-  failedLoginAttempts Int               @default(0)
+  failedLoginAttempts Int                  @default(0)
   /// Enquanto no futuro, o login da conta é recusado sem verificar a senha.
-  lockedUntil         DateTime?         @db.Timestamptz(3)
+  lockedUntil         DateTime?            @db.Timestamptz(3)
   memberships         Membership[]
   refreshTokens       RefreshToken[]
-  comments            TaskComment[]     @relation("CommentAuthor")
-  activities          TaskActivity[]    @relation("ActivityActor")
-  notifications       Notification[]    @relation("NotificationRecipient")
-  notificationsSent   Notification[]    @relation("NotificationActor")
-  attachments         TaskAttachment[]  @relation("AttachmentUploader")
-  createdTasks        Task[]            @relation("TaskCreator")
-  assignedTasks       Task[]            @relation("TaskAssignee")
-  checkouts           BillingCheckout[] @relation("CheckoutRequester")
-  planChanges         PlanChange[]      @relation("PlanChangeActor")
-  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  passwordResets      PasswordResetToken[]
+  comments            TaskComment[]        @relation("CommentAuthor")
+  activities          TaskActivity[]       @relation("ActivityActor")
+  notifications       Notification[]       @relation("NotificationRecipient")
+  notificationsSent   Notification[]       @relation("NotificationActor")
+  attachments         TaskAttachment[]     @relation("AttachmentUploader")
+  createdTasks        Task[]               @relation("TaskCreator")
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  checkouts           BillingCheckout[]    @relation("CheckoutRequester")
+  planChanges         PlanChange[]         @relation("PlanChangeActor")
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
   @@map("users")
 }
@@ -302,4 +303,19 @@ model PlanChange {
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@map("plan_changes")
+}
+
+/// Link de redefinição de senha. Só o hash SHA-256 do token é guardado; o
+/// token vale uma única vez e por pouco tempo.
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("password_reset_tokens")
 }

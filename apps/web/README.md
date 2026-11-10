@@ -48,6 +48,17 @@ as ações feitas em nome do usuário: mantenha CSP e as proteções do Angular.
 informam quando a API recusa tentativas em excesso (429), seja pelo limite por
 IP, seja pelo bloqueio temporário da conta.
 
+## Recuperação de senha
+
+"Esqueci minha senha", na tela de login, abre `/forgot-password`, que pede o
+e-mail e sempre mostra a mesma confirmação. O link do e-mail abre
+`/reset-password#token=...`. A tela tira o token da barra de endereço, pede a
+nova senha duas vezes e, ao concluir, encerra a sessão local e volta ao login
+com um aviso. Um link inválido ou vencido oferece pedir outro.
+
+Em desenvolvimento, com `MAIL_PROVIDER=file` na API, abra o arquivo `.eml` mais
+recente em `apps/api/tmp/mail/` e copie o link.
+
 ## Organizações
 
 Após validar a sessão, o frontend consulta `GET /organizations`. Na página

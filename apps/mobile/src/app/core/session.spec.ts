@@ -117,6 +117,17 @@ describe('SessionService and auth interceptor', () => {
     expect(await result).toEqual([]);
   });
 
+  it('asks for a password reset without needing a session', async () => {
+    const service = TestBed.inject(SessionService);
+    const request = service.requestPasswordReset('ana@example.test');
+    await settle();
+    const call = http.expectOne('/api/auth/password/forgot');
+    expect(call.request.headers.has('Authorization')).toBe(false);
+    expect(call.request.body).toEqual({ email: 'ana@example.test' });
+    call.flush({ message: 'ok' }, { status: 202, statusText: 'Accepted' });
+    await request;
+  });
+
   it('revokes the session and wipes local data on logout, even offline', async () => {
     store.values.set('taskflow.refreshToken', 'r1');
     store.values.set('taskflow.user', JSON.stringify(user));

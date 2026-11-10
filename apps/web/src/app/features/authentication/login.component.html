@@ -7,6 +7,8 @@
       <p class="message message--info" role="status">Sua sessão expirou. Entre novamente para continuar.</p>
     } @else if (registered) {
       <p class="message message--info" role="status">Conta criada. Entre com seu e-mail e senha.</p>
+    } @else if (passwordReset) {
+      <p class="message message--info" role="status">Senha redefinida. Entre com a nova senha.</p>
     } @else if (sessionsEnded) {
       <p class="message message--info" role="status">Todas as sessões foram encerradas. Entre novamente para continuar.</p>
     }
@@ -28,6 +30,7 @@
       @if (form.controls.password.touched && form.controls.password.invalid) {
         <p id="login-password-error" class="field-error">Informe sua senha com até 128 caracteres.</p>
       }
+      <a class="forgot" routerLink="/forgot-password">Esqueci minha senha</a>
     </div>
     <button class="tf-button submit" type="submit" [disabled]="loading()">
       {{ loading() ? 'Entrando…' : 'Entrar' }}

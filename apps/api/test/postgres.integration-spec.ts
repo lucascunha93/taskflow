@@ -20,6 +20,10 @@ import { ProjectsModule } from '../src/projects/projects.module.js';
 import { StorageModule } from '../src/storage/storage.module.js';
 import { PlansModule } from '../src/plans/plans.module.js';
 import { BillingModule } from '../src/billing/billing.module.js';
+import { MailModule } from '../src/mail/mail.module.js';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { FREE_ORGANIZATIONS_PER_OWNER, PLANS } from '../src/plans/plan-limits.js';
 
 type TestUser = { id: string; email: string; token: string };
@@ -32,6 +36,9 @@ describe('HTTP integration with isolated PostgreSQL', () => {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousJwtSecret = process.env.JWT_SECRET;
   const previousBilling = process.env.BILLING_PROVIDER;
+  const mailKeys = ['MAIL_PROVIDER', 'MAIL_OUTBOX_DIR', 'APP_URL'] as const;
+  const previousMail = Object.fromEntries(mailKeys.map((key) => [key, process.env[key]]));
+  const outbox = mkdtempSync(join(tmpdir(), 'taskflow-mail-'));
   const s3Keys = ['S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID',
     'S3_SECRET_ACCESS_KEY', 'S3_FORCE_PATH_STYLE', 'S3_CREATE_BUCKET'] as const;
   const previousS3 = Object.fromEntries(s3Keys.map((key) => [key, process.env[key]]));
@@ -94,6 +101,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     process.env.DATABASE_URL = raw;
     process.env.JWT_SECRET = `integration-only-${randomUUID()}-${randomUUID()}`;
     process.env.BILLING_PROVIDER = 'fake';
+    Object.assign(process.env, { MAIL_PROVIDER: 'file', MAIL_OUTBOX_DIR: outbox, APP_URL: 'https://app.example.test' });
 
     // Armazenamento S3 dedicado aos testes, com as mesmas salvaguardas do banco.
     const s3Url = process.env.TASKFLOW_INTEGRATION_S3_URL;
@@ -115,7 +123,7 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       credentials: { accessKeyId: s3AccessKey, secretAccessKey: s3Secret },
     });
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, AuthModule, PlansModule, OrganizationsModule, TasksModule, ProjectsModule, BillingModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, StorageModule, MailModule, AuthModule, PlansModule, OrganizationsModule, TasksModule, ProjectsModule, BillingModule],
     })
       // O limite por IP tem teste HTTP próprio; aqui ele mascararia o bloqueio por conta.
       .overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true })
@@ -161,6 +169,11 @@ describe('HTTP integration with isolated PostgreSQL', () => {
       else process.env.JWT_SECRET = previousJwtSecret;
       if (previousBilling === undefined) delete process.env.BILLING_PROVIDER;
       else process.env.BILLING_PROVIDER = previousBilling;
+      for (const key of mailKeys) {
+        if (previousMail[key] === undefined) delete process.env[key];
+        else process.env[key] = previousMail[key];
+      }
+      rmSync(outbox, { recursive: true, force: true });
       for (const key of s3Keys) {
         if (previousS3[key] === undefined) delete process.env[key];
         else process.env[key] = previousS3[key];
@@ -780,6 +793,66 @@ describe('HTTP integration with isolated PostgreSQL', () => {
     expect(overview.body).toMatchObject({ provider: 'fake', canManage: true });
     expect(overview.body.history.map((item: { fromPlan: string; toPlan: string }) => `${item.fromPlan}>${item.toPlan}`)).toEqual(['PRO>FREE', 'FREE>PRO']);
     expect((await http().get(base).set('Authorization', auth(billingMember)).expect(200)).body.history).toEqual([]);
+  });
+
+  it('recovers a password through a single-use e-mailed link', async () => {
+    const http = () => request(app.getHttpServer());
+    const forgetful = await register('forgetful');
+    const mails = () => readdirSync(outbox).filter((file) => file.endsWith('.eml'));
+    const waitFor = async (check: () => Promise<boolean>) => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        if (await check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error('Timeout waiting for the reset e-mail');
+    };
+    const tokenFrom = (file: string) => /reset-password#token=([\w-]+)/.exec(readFileSync(join(outbox, file), 'utf8'))?.[1] ?? '';
+
+    // E-mail inexistente: mesma resposta e nada enviado.
+    const unknown = await http().post('/auth/password/forgot').send({ email: `nobody-${runId}@example.test` }).expect(202);
+    const before = mails().length;
+    const sessionCookie = await loginWithCookie(forgetful.email);
+    const mobile = await http().post('/auth/mobile/login').send({ email: forgetful.email, password }).expect(200);
+
+    const known = await http().post('/auth/password/forgot').send({ email: forgetful.email.toUpperCase() }).expect(202);
+    expect(known.body).toEqual(unknown.body);
+    await waitFor(async () => mails().length === before + 1);
+    const file = mails().find((name) => readFileSync(join(outbox, name), 'utf8').includes(`To: ${forgetful.email}`))!;
+    const token = tokenFrom(file);
+    expect(token).toHaveLength(43);
+    expect(await prisma.passwordResetToken.count({ where: { userId: forgetful.id } })).toBe(1);
+    expect((await prisma.passwordResetToken.findFirstOrThrow({ where: { userId: forgetful.id } })).tokenHash).not.toContain(token);
+
+    // Novo pedido logo em seguida: nenhum e-mail novo (intervalo mínimo).
+    await http().post('/auth/password/forgot').send({ email: forgetful.email }).expect(202);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(mails().length).toBe(before + 1);
+
+    await http().post('/auth/password/reset').send({ token: 'x'.repeat(43), newPassword: 'nova-senha-bem-longa' }).expect(400);
+    await http().post('/auth/password/reset').send({ token, newPassword: 'curta' }).expect(400);
+
+    // Conta bloqueada por tentativas é liberada pela redefinição.
+    await prisma.user.update({ where: { id: forgetful.id }, data: { lockedUntil: new Date(Date.now() + 600_000), failedLoginAttempts: 5 } });
+    const results = await Promise.all([1, 2].map(() =>
+      http().post('/auth/password/reset').send({ token, newPassword: 'nova-senha-bem-longa' })));
+    expect(results.map((result) => result.status).sort((a, b) => a - b)).toEqual([204, 400]);
+
+    // Todas as sessões anteriores terminam.
+    await http().get('/auth/me').set('Authorization', auth(forgetful)).expect(401);
+    await refresh(sessionCookie).expect(401);
+    await http().post('/auth/mobile/refresh').send({ refreshToken: mobile.body.refreshToken }).expect(401);
+    await http().post('/auth/login').send({ email: forgetful.email, password }).expect(401);
+    await http().post('/auth/login').send({ email: forgetful.email, password: 'nova-senha-bem-longa' }).expect(201);
+    await http().post('/auth/password/reset').send({ token, newPassword: 'outra-senha-bem-longa' }).expect(400);
+
+    // Link vencido.
+    await prisma.passwordResetToken.deleteMany({ where: { userId: forgetful.id } });
+    await http().post('/auth/password/forgot').send({ email: forgetful.email }).expect(202);
+    await waitFor(async () => (await prisma.passwordResetToken.count({ where: { userId: forgetful.id, usedAt: null } })) === 1);
+    await waitFor(async () => mails().length === before + 2);
+    const late = tokenFrom(mails().filter((name) => name !== file).sort().at(-1)!);
+    await prisma.passwordResetToken.updateMany({ where: { userId: forgetful.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await http().post('/auth/password/reset').send({ token: late, newPassword: 'outra-senha-bem-longa' }).expect(400);
   });
 
   it('rolls back organization creation when OWNER membership violates a foreign key', async () => {

@@ -8,7 +8,8 @@ frontend Angular (`apps/web`) e o app mobile Ionic com Capacitor
 ## Estado atual
 
 - Cadastro, login com Argon2id e JWT, perfil autenticado e alteração do nome.
-- Troca de senha, encerramento de todas as sessões (revogação de JWT por versão
+- Recuperação de senha por e-mail com link de uso único (em desenvolvimento,
+  os e-mails são gravados em arquivos), troca de senha, encerramento de todas as sessões (revogação de JWT por versão
   de sessão) e bloqueio temporário da conta após falhas seguidas de login.
 - Criação, listagem e renomeação de organizações; inclusão e listagem de
   membros com verificação de permissões.

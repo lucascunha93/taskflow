@@ -73,6 +73,19 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     errors.push('BILLING_PROVIDER=fake não pode ser usado com NODE_ENV=production.');
   }
 
+  // E-mail: só existe a caixa de saída em arquivos, para desenvolvimento.
+  const mailProvider = text('MAIL_PROVIDER');
+  if (mailProvider !== undefined && mailProvider !== 'file') {
+    errors.push('MAIL_PROVIDER aceita somente "file" (e-mails gravados em arquivos).');
+  }
+  if (mailProvider === 'file' && text('NODE_ENV') === 'production') {
+    errors.push('MAIL_PROVIDER=file não pode ser usado com NODE_ENV=production.');
+  }
+  const appUrl = text('APP_URL');
+  if (appUrl !== undefined && !/^https?:\/\/[^\s/]+(?:\/[^\s?#]*)?$/.test(appUrl)) {
+    errors.push('APP_URL precisa ser a URL http(s) do frontend, sem query nem fragmento.');
+  }
+
   if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
     errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
   }

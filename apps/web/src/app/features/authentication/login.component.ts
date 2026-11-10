@@ -22,6 +22,7 @@ export class LoginComponent {
   private readonly query = inject(ActivatedRoute).snapshot.queryParamMap;
   protected readonly registered = this.query.get('registered') === '1';
   protected readonly sessionsEnded = this.query.get('sessions') === 'ended';
+  protected readonly passwordReset = this.query.get('reset') === '1';
   protected readonly loading = signal(false);
   protected readonly error = signal('');
   protected readonly form = this.fb.group({

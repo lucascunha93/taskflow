@@ -44,6 +44,15 @@ describe('validateEnvironment', () => {
 });
 
 describe('parseCorsOrigins', () => {
+  it('accepts only the file mail provider outside production and a valid APP_URL', () => {
+    const base = { JWT_SECRET: 'test-only-secret-at-least-32-characters' };
+    expect(() => validateEnvironment({ ...base, MAIL_PROVIDER: 'file', APP_URL: 'https://app.example.test' })).not.toThrow();
+    expect(() => validateEnvironment({ ...base, MAIL_PROVIDER: 'smtp' })).toThrow(/MAIL_PROVIDER/);
+    expect(() => validateEnvironment({ ...base, MAIL_PROVIDER: 'file', NODE_ENV: 'production' })).toThrow(/NODE_ENV=production/);
+    expect(() => validateEnvironment({ ...base, APP_URL: 'app.example.test' })).toThrow(/APP_URL/);
+    expect(() => validateEnvironment({ ...base, APP_URL: 'https://app.example.test/?x=1' })).toThrow(/APP_URL/);
+  });
+
   it('accepts only the simulated billing provider, and never in production', () => {
     expect(() => validateEnvironment({ JWT_SECRET: 'test-only-secret-at-least-32-characters', BILLING_PROVIDER: 'fake' })).not.toThrow();
     expect(() => validateEnvironment({ JWT_SECRET: 'test-only-secret-at-least-32-characters', BILLING_PROVIDER: 'stripe' })).toThrow(/BILLING_PROVIDER/);

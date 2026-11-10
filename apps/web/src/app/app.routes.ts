@@ -4,6 +4,9 @@ import { authGuard, guestGuard, sessionErrorGuard } from './core/auth/auth.guard
 export const routes: Routes = [
   { path: 'login', canActivate: [guestGuard], loadComponent: () => import('./features/authentication/login.component').then((m) => m.LoginComponent) },
   { path: 'register', canActivate: [guestGuard], loadComponent: () => import('./features/authentication/register.component').then((m) => m.RegisterComponent) },
+  { path: 'forgot-password', canActivate: [guestGuard], loadComponent: () => import('./features/authentication/forgot-password.component').then((m) => m.ForgotPasswordComponent) },
+  // Acessível com ou sem sessão: o link do e-mail pode ser aberto já logado.
+  { path: 'reset-password', loadComponent: () => import('./features/authentication/reset-password.component').then((m) => m.ResetPasswordComponent) },
   { path: 'session-error', canActivate: [sessionErrorGuard], loadComponent: () => import('./features/authentication/session-error.component').then((m) => m.SessionErrorComponent) },
   {
     path: '',

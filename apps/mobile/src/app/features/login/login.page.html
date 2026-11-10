@@ -25,9 +25,13 @@
     @if (error()) {
       <ion-text color="danger" class="error" role="alert">{{ error() }}</ion-text>
     }
+    @if (notice()) {
+      <ion-text color="medium" class="error" role="status">{{ notice() }}</ion-text>
+    }
 
     <ion-button expand="block" type="submit" [disabled]="busy()">
       @if (busy()) { <ion-spinner name="crescent" /> } @else { Entrar }
     </ion-button>
+    <ion-button expand="block" fill="clear" type="button" [disabled]="busy()" (click)="forgot()">Esqueci minha senha</ion-button>
   </form>
 </ion-content>

@@ -82,6 +82,14 @@ export class SessionService {
     await this.save(session);
   }
 
+  /**
+   * Pede o e-mail de redefinição de senha. A API responde igual exista ou não a
+   * conta; o link do e-mail abre a tela de redefinição no navegador.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    await firstValueFrom(this.http.post(`${this.base}/auth/password/forgot`, { email }));
+  }
+
   /** Encerra a sessão no servidor (se possível) e apaga os dados locais. */
   async logout(): Promise<void> {
     const token = await this.store.get(REFRESH_KEY);

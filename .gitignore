@@ -26,3 +26,6 @@ Thumbs.db
 *.sqlite3
 *.db
 
+
+# Caixa de saída de e-mails da API em desenvolvimento (MAIL_PROVIDER=file)
+apps/api/tmp/

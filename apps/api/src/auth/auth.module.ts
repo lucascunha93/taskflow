@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller.js';
 import { MobileAuthController } from './mobile-auth.controller.js';
+import { PasswordResetController } from './password-reset.controller.js';
+import { PasswordResetService } from './password-reset.service.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RefreshCookieService, RefreshRequestGuard } from './refresh-cookie.js';
@@ -36,8 +38,8 @@ import { RefreshTokensService } from './refresh-tokens.service.js';
       },
     }),
   ],
-  controllers: [AuthController, MobileAuthController],
-  providers: [AuthService, JwtAuthGuard, RefreshTokensService, RefreshCookieService, RefreshRequestGuard],
+  controllers: [AuthController, MobileAuthController, PasswordResetController],
+  providers: [AuthService, PasswordResetService, JwtAuthGuard, RefreshTokensService, RefreshCookieService, RefreshRequestGuard],
   exports: [AuthService, JwtAuthGuard, JwtModule],
 })
 export class AuthModule { }

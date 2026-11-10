@@ -24,6 +24,8 @@ não existir. Preencha valores próprios:
 | `S3_ENDPOINT` | Endpoint usado pela API (ex.: `http://127.0.0.1:8333`); omitido, usa a AWS. |
 | `S3_PUBLIC_ENDPOINT` | Endereço acessível pelo navegador para as URLs assinadas de download; padrão: `S3_ENDPOINT`. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | Região (padrão `us-east-1`) e endereçamento por caminho (`true` para SeaweedFS/MinIO). |
+| `MAIL_PROVIDER` | Opcional. `file` grava cada e-mail como arquivo `.eml` em `MAIL_OUTBOX_DIR` (padrão `tmp/mail`), sem enviar nada; recusado com `NODE_ENV=production`. Sem valor, a recuperação de senha responde 503. |
+| `APP_URL` | URL do frontend usada nos links dos e-mails; padrão `http://localhost:4200`. |
 | `BILLING_PROVIDER` | Opcional. `fake` habilita o checkout simulado (sem cobrança). Recusado com `NODE_ENV=production`. Sem valor, a contratação online fica indisponível (503). |
 | `S3_CREATE_BUCKET` | `true` cria o bucket ausente ao iniciar; use somente em desenvolvimento. |
 | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | Par de configuração do NestJS Observe, quando utilizado. |
@@ -156,6 +158,7 @@ de produção.
 | GET, PATCH | `/auth/me` | JWT |
 | POST | `/auth/refresh`, `/auth/logout` | Cookie de refresh + `X-TaskFlow-Request: 1` |
 | POST | `/auth/mobile/login`, `/auth/mobile/refresh`, `/auth/mobile/logout` | Não (refresh token no corpo) |
+| POST | `/auth/password/forgot`, `/auth/password/reset` | Não (limite por IP) |
 | GET, POST | `/organizations/:organizationId/tasks/:taskId/attachments` | JWT |
 | GET | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId/download` | JWT |
 | DELETE | `/organizations/:organizationId/tasks/:taskId/attachments/:attachmentId` | JWT |
@@ -207,6 +210,29 @@ contém o refresh token.
   não conseguem enviá-lo, e o CORS bloqueia scripts de origens não autorizadas.
 - Tokens expirados de um usuário são removidos quando ele inicia uma nova
   sessão; os revogados são mantidos até expirar, para detectar reutilização.
+
+### Recuperação de senha
+
+- `POST /auth/password/forgot` com `{ email }` responde sempre 202 com a mesma
+  mensagem, exista ou não a conta. O processamento ocorre em segundo plano para
+  que o tempo de resposta também não revele o resultado.
+- Se a conta existir, um link `<APP_URL>/reset-password#token=...` é enviado
+  por e-mail. Ele vale 30 minutos e uma única vez, e o banco guarda só o hash
+  SHA-256 do token (`password_reset_tokens`). O token vai no fragmento (`#`),
+  que o navegador não envia ao servidor nem como `Referer`.
+- Um novo pedido invalida o link anterior. Para o mesmo usuário, sai no máximo
+  um e-mail por minuto.
+- `POST /auth/password/reset` com `{ token, newPassword }` (12 a 128
+  caracteres) responde 204. Link inválido, usado ou vencido retorna 400; com dois
+  envios simultâneos do mesmo link, só um vale.
+- A redefinição encerra todas as sessões (web e mobile), zera as falhas de
+  login e remove um bloqueio temporário da conta.
+- Os dois endpoints usam o mesmo limite por IP do login.
+
+O envio fica atrás de `MailService` (`src/mail/`). Em desenvolvimento,
+`MAIL_PROVIDER=file` grava as mensagens em `apps/api/tmp/mail/`, ignorada pelo
+git, e o log registra só o destinatário mascarado. Para produção, implemente
+`MailService` com um serviço de envio (SMTP, Amazon SES, Resend etc.).
 
 ### Sessão do app mobile
 

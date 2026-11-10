@@ -15,12 +15,14 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { PlansModule } from './plans/plans.module.js';
 import { BillingModule } from './billing/billing.module.js';
+import { MailModule } from './mail/mail.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     StorageModule,
+    MailModule,
     AuthModule,
     PlansModule,
     // Avaliado depois do ConfigModule carregar o .env. Sem o par de credenciais,

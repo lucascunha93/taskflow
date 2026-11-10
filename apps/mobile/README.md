@@ -6,7 +6,9 @@ aparelho e as alterações são enviadas quando houver conexão.
 
 ## O que o app faz
 
-- Login com a mesma conta da web e escolha da organização.
+- Login com a mesma conta da web e escolha da organização. "Esqueci minha
+  senha" envia o link de redefinição para o e-mail digitado; o link abre a tela
+  do web.
 - Lista de tarefas com filtro por status, busca pelo título e "puxar para
   sincronizar".
 - Criação, edição (título, descrição, status, responsável, projeto e prazo) e

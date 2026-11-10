@@ -24,10 +24,35 @@ export class LoginPage {
   private readonly router = inject(Router);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
+  protected readonly notice = signal('');
   protected readonly form = inject(FormBuilder).nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+
+  /** Envia o link de redefinição para o e-mail digitado. */
+  protected async forgot(): Promise<void> {
+    if (this.busy()) return;
+    const control = this.form.controls.email;
+    if (control.invalid) {
+      control.markAsTouched();
+      this.error.set('Digite o e-mail da conta para receber o link de redefinição.');
+      return;
+    }
+    this.busy.set(true);
+    this.error.set('');
+    this.notice.set('');
+    try {
+      await this.session.requestPasswordReset(control.value.trim());
+      this.notice.set('Se houver uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 30 minutos.');
+    } catch (error: unknown) {
+      this.error.set(error instanceof HttpErrorResponse && error.status === 503
+        ? 'A recuperação de senha não está disponível no momento.'
+        : loginError(error));
+    } finally {
+      this.busy.set(false);
+    }
+  }
 
   protected async submit(): Promise<void> {
     if (this.busy()) return;
