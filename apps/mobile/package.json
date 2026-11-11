@@ -25,6 +25,7 @@
     "@capacitor/core": "8.5.3",
     "@capacitor/network": "8.0.1",
     "@ionic/angular": "9.0.9",
+    "@sentry/angular": "11.9.0",
     "capacitor-secure-storage-plugin": "0.13.0",
     "idb": "8.0.4",
     "ionicons": "8.1.0",

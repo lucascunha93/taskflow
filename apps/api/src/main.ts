@@ -1,3 +1,5 @@
+// Precisa ser o primeiro import: inicializa a captura de erros antes do restante.
+import './instrument.js';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';

@@ -86,6 +86,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     errors.push('APP_URL precisa ser a URL http(s) do frontend, sem query nem fragmento.');
   }
 
+  const sentryDsn = text('SENTRY_DSN');
+  if (sentryDsn !== undefined && !/^https?:\/\/[^\s@/]+@[^\s/]+\/\S+$/.test(sentryDsn)) {
+    errors.push('SENTRY_DSN precisa ser o DSN do projeto no GlitchTip/Sentry (https://chave@host/id).');
+  }
+
   if (Boolean(text('OBSERVE_APP_KEY')) !== Boolean(text('OBSERVE_APP_SECRET'))) {
     errors.push('OBSERVE_APP_KEY e OBSERVE_APP_SECRET devem ser definidas juntas.');
   }

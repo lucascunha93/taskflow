@@ -10,4 +10,7 @@
  */
 export const environment = {
   apiBaseUrl: 'http://10.0.2.2:3000',
+  /** DSN do projeto no GlitchTip/Sentry (é público por natureza); vazio desliga a captura de erros. */
+  sentryDsn: '',
+  sentryEnvironment: 'mobile-local',
 };
